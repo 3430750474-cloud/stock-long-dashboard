@@ -226,6 +226,16 @@ async function loadKline(code){
     }catch(e){}
   }
   try{
+    const url='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+code+',day,,,160,qfq';
+    const data=await fetchJson(url);
+    const d=(((data||{}).data||{})[sym+code])||{};
+    const raw=d['qfqday']||d['day']||[];
+    if(raw.length){
+      raw.forEach(x=>rows.push({ date:x[0], open:+x[1], close:+x[2], high:+x[3], low:+x[4], volume:+x[5] }));
+      return rows;
+    }
+  }catch(e){}
+  try{
     const secid = (code.startsWith('399')||code.startsWith('999')) ? '0.'+code : (sym==='sh'?'1.':'0.')+code;
     const url='https://push2his.eastmoney.com/api/qt/stock/kline/get?secid='+secid+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=160';
     const data=await fetchJson(url);
@@ -269,7 +279,7 @@ async function loadKlines(codes){
     }catch(e){}
   }
   const out={};
-  const CH=8;
+  const CH=6;
   for(let i=0;i<uniq.length;i+=CH){
     await Promise.all(uniq.slice(i,i+CH).map(async c=>{
       try{ out[c]=await loadKline(c); }catch(e){}
