@@ -300,21 +300,32 @@ async function loadPool(mode){
   }
   const out=[];
   const num=80;
-  const jobs=[];
-  for(let page=1;page<=8;page++){
+  const pageList=[1,2,3,4,5,6,7,8];
+  let poolIdx=0;
+  async function fetchPoolPage(page){
     const base='https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+page+'&num='+num+'&sort=amount&asc=0&node=hs_a&symbol=&_s_r_a=page';
-    jobs.push(fetchJson(base, null, 5000).catch(()=>[]));
+    for(let attempt=0;attempt<3;attempt++){
+      try{
+        const arr=await fetchJson(base, null, 6000);
+        if(Array.isArray(arr)&&arr.length) return arr;
+      }catch(e){}
+      await new Promise(r=>setTimeout(r, 700+attempt*700));
+    }
+    return [];
   }
-  const pageArr=await Promise.all(jobs);
-  pageArr.forEach(arr=>{
-    if(!Array.isArray(arr)) return;
-    arr.forEach(x=>{
-      const price=+x.trade;
-      if(!x.code||!price||/ST|退/.test(x.name||'')) return;
-      if(price>100) return;
-      out.push({ code:x.code, name:x.name, price, amount:x.amount||0 });
-    });
-  });
+  async function poolWorker(){
+    while(poolIdx<pageList.length){
+      const page=pageList[poolIdx++];
+      const arr=await fetchPoolPage(page);
+      arr.forEach(x=>{
+        const price=+x.trade;
+        if(!x.code||!price||/ST|退/.test(x.name||'')) return;
+        if(price>100) return;
+        out.push({ code:x.code, name:x.name, price, amount:x.amount||0 });
+      });
+    }
+  }
+  await Promise.all([poolWorker(),poolWorker(),poolWorker(),poolWorker()]);
   const seen=new Set();
   return out.filter(s=>{
     if(seen.has(s.code)) return false;
