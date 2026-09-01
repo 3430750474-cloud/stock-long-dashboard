@@ -1,0 +1,13 @@
+{
+  "name": "long-term-stock-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "中长期量化选股看板",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

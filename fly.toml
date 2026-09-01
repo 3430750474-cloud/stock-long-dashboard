@@ -1,0 +1,13 @@
+app = "stock-long-dashboard"
+
+[env]
+  PORT = "8745"
+
+[services]
+  internal_port = 8745
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true

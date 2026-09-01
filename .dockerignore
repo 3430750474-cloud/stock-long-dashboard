@@ -1,0 +1,12 @@
+.git
+.gitignore
+node_modules
+data
+staging_paper
+backup_original_20260826
+backup_20260901_新策略.html
+%SystemDrive%
+*.log
+*.png
+__*
+cloudflared.exe
