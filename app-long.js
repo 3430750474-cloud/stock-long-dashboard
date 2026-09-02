@@ -83,6 +83,7 @@ const state = {
 };
 const STATIC_HOST = (typeof location!=='undefined') && (/\.github\.io$/.test(location.hostname) || location.protocol==='file:');
 const USE_SERVER = (typeof location!=='undefined') && (location.protocol==='http:'||location.protocol==='https:') && !STATIC_HOST;
+const API_BASE = (typeof window!=='undefined' && window.__API_BASE) || '';
 
 const $ = id => document.getElementById(id);
 const fmt = (n,d) => { if(n==null||isNaN(+n)) return '-'; return (+n).toFixed(d==null?2:d); };
@@ -175,6 +176,15 @@ async function loadQuotes(syms){
       }
     }catch(e){}
   }
+  if(API_BASE && !USE_SERVER){
+    try{
+      const r=await fetch(API_BASE+'/api/quote?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' });
+      if(r.ok){
+        const d=await r.json();
+        if(d) return d;
+      }
+    }catch(e){}
+  }
   const url='https://qt.gtimg.cn/q='+uniq.join(',')+'&_='+Date.now();
   const out={};
   try{
@@ -219,6 +229,15 @@ async function loadKline(code){
   if(USE_SERVER){
     try{
       const r=await fetch('/api/kline?code='+code, { mode:'cors' });
+      if(r.ok){
+        const arr=await r.json();
+        if(Array.isArray(arr)) return arr;
+      }
+    }catch(e){}
+  }
+  if(API_BASE && !USE_SERVER){
+    try{
+      const r=await fetch(API_BASE+'/api/kline?code='+code, { mode:'cors' });
       if(r.ok){
         const arr=await r.json();
         if(Array.isArray(arr)) return arr;
@@ -278,6 +297,20 @@ async function loadKlines(codes){
       }
     }catch(e){}
   }
+  if(API_BASE && !USE_SERVER && uniq.length){
+    const out={};
+    const CH=20;
+    for(let i=0;i<uniq.length;i+=CH){
+      try{
+        const r=await fetch(API_BASE+'/api/klineBatch?codes='+encodeURIComponent(uniq.slice(i,i+CH).join(',')), { mode:'cors' });
+        if(r.ok){
+          const d=await r.json();
+          if(d) Object.assign(out,d);
+        }
+      }catch(e){}
+    }
+    return out;
+  }
   const out={};
   const CH=6;
   for(let i=0;i<uniq.length;i+=CH){
@@ -292,6 +325,15 @@ async function loadPool(mode){
   if(USE_SERVER){
     try{
       const r=await fetch('/api/pool?mode='+mode, { mode:'cors' });
+      if(r.ok){
+        const arr=await r.json();
+        if(Array.isArray(arr)&&arr.length) return arr;
+      }
+    }catch(e){}
+  }
+  if(API_BASE && !USE_SERVER){
+    try{
+      const r=await fetch(API_BASE+'/api/pool?mode='+mode, { mode:'cors' });
       if(r.ok){
         const arr=await r.json();
         if(Array.isArray(arr)&&arr.length) return arr;
@@ -348,6 +390,16 @@ async function loadQuality(code){
       }
     }catch(e){}
   }
+  if(API_BASE && !USE_SERVER){
+    try{
+      const r=await fetch(API_BASE+'/api/quality?code='+code, { mode:'cors' });
+      if(r.ok){
+        const d=await r.json();
+        state.qualCache.set(code,{d,t:now});
+        return d;
+      }
+    }catch(e){}
+  }
   const scode = code.startsWith('6') ? code+'.SH' : code+'.SZ';
   const url='https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=(SECUCODE%3D%22'+scode+'%22)&pageNumber=1&pageSize=2&sortTypes=-1&sortColumns=REPORT_DATE';
   try{
@@ -373,6 +425,20 @@ async function loadQualities(codes){
         if(d) return d;
       }
     }catch(e){}
+  }
+  if(API_BASE && !USE_SERVER){
+    const out={};
+    const CH=20;
+    for(let i=0;i<uniq.length;i+=CH){
+      try{
+        const r=await fetch(API_BASE+'/api/qualityBatch?codes='+encodeURIComponent(uniq.slice(i,i+CH).join(',')), { mode:'cors' });
+        if(r.ok){
+          const d=await r.json();
+          if(d) Object.assign(out,d);
+        }
+      }catch(e){}
+    }
+    return out;
   }
   const out={};
   const CH=6;
@@ -1056,6 +1122,15 @@ async function fetchSuggestions(q){
   if(USE_SERVER){
     try{
       const r=await fetch('/api/search?q='+encodeURIComponent(q.trim()), { mode:'cors' });
+      if(r.ok){
+        const d=await r.json();
+        if(Array.isArray(d)&&d.length) return d;
+      }
+    }catch(e){}
+  }
+  if(API_BASE && !USE_SERVER){
+    try{
+      const r=await fetch(API_BASE+'/api/search?q='+encodeURIComponent(q.trim()), { mode:'cors' });
       if(r.ok){
         const d=await r.json();
         if(Array.isArray(d)&&d.length) return d;
