@@ -332,7 +332,7 @@ async function loadKlines(codes){
   }
   if(API_BASE && !USE_SERVER && uniq.length){
     const out={};
-    const CH=25;
+    const CH=12;
     const chunks=[];
     for(let i=0;i<uniq.length;i+=CH) chunks.push(uniq.slice(i,i+CH));
     let batchIdx=0;
@@ -486,7 +486,7 @@ async function loadQualities(codes){
   }
   if(API_BASE && !USE_SERVER){
     const out={};
-    const CH=25;
+    const CH=12;
     const chunks=[];
     for(let i=0;i<uniq.length;i+=CH) chunks.push(uniq.slice(i,i+CH));
     let batchIdx=0;
