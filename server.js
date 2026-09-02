@@ -80,10 +80,12 @@ function symOf(code){
   return (code.startsWith('6')||code.startsWith('68')||code.startsWith('90')) ? 'sh' : 'sz';
 }
 
-async function fetchPool(mode){
+async function fetchPool(mode, force){
   const key = 'pool:'+mode;
-  const cached = cacheGet(key, 300000);
-  if(cached) return cached;
+  if(!force){
+    const cached = cacheGet(key, 300000);
+    if(cached) return cached;
+  }
   if(mode==='lt100'){
     const fast = await fetchEastmoneyPool(100, 220);
     if(fast.length){
@@ -114,10 +116,10 @@ async function fetchPool(mode){
     pages.forEach(arr=>{
       if(!arr.length){ emptyCount++; return; }
       arr.forEach(x=>{
-        const price = +x.trade;
+        const price = +x.trade || +x.settlement;
         if(!x.code || !price || /ST|退/.test(x.name||'')) return;
         if(price>=maxPrice) return;
-        out.push({ code:x.code, name:x.name, price, amount:x.amount||0 });
+        out.push({ code:x.code, name:x.name, price, amount:+x.amount || +x.nmc || +x.mktcap || 0 });
       });
     });
     if(emptyCount>=3) break;
@@ -128,8 +130,8 @@ async function fetchPool(mode){
     seen.add(s.code);
     return true;
   });
-  const res = uniq.sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,160);
-  cacheSet(key,res);
+  const res = uniq.sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,120);
+  if(res.length) cacheSet(key,res);
   return res;
 }
 
@@ -202,7 +204,7 @@ async function fetchKline(code){
   if(cached) return cached;
   const sym = symOf(code);
   try{
-    const url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=160';
+    const url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=140';
     const r = await get(url);
     if(r.status===200){
       const arr = JSON.parse(r.body.toString('utf8'));
@@ -299,7 +301,7 @@ const server = http.createServer(async (req,res)=>{
     if(p.startsWith('/api/')){
       if(p==='/api/pool'){
         const mode = u.searchParams.get('mode') || 'lt10';
-        sendJson(res, await fetchPool(mode));
+        sendJson(res, await fetchPool(mode, u.searchParams.get('refresh')==='1'));
         return;
       }
       if(p==='/api/search'){
@@ -316,7 +318,7 @@ const server = http.createServer(async (req,res)=>{
       if(p==='/api/klineBatch'){
         const codes = (u.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,300);
         const out = {};
-        await runConcurrent(codes, 10, async code=>{
+        await runConcurrent(codes, 14, async code=>{
           out[code] = await fetchKline(code);
         });
         sendJson(res, out);
@@ -336,7 +338,7 @@ const server = http.createServer(async (req,res)=>{
       if(p==='/api/qualityBatch'){
         const codes = (u.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,300);
         const out = {};
-        await runConcurrent(codes, 8, async code=>{
+        await runConcurrent(codes, 10, async code=>{
           out[code] = await fetchQuality(code);
         });
         sendJson(res, out);
