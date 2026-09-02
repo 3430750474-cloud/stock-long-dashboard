@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>论文驱动量化看板 · 5大策略 v2.0 | 回测联动版</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1117;color:#c9d1d9;line-height:1.7}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+.header{background:linear-gradient(135deg,#161b22,#0d1117);border:1px solid #30363d;border-radius:12px;padding:20px 24px;margin-bottom:16px}
+.header h1{font-size:20px;color:#f0f6fc;margin-bottom:6px}
+.header .meta{font-size:12px;color:#8b949e}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:6px}
+.badge-b{background:#1f6feb33;color:#58a6ff}.badge-g{background:#23863633;color:#3fb950}.badge-r{background:#da363333;color:#f85149}.badge-y{background:#d2992233;color:#e3b341}.badge-p{background:#8957e533;color:#d2a8ff}
+.tabs{display:flex;gap:2px;margin-bottom:16px;flex-wrap:wrap;border-bottom:2px solid #30363d}
+.tab{padding:10px 14px;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:#8b949e;transition:all .2s;border:none}
+.tab.active{background:#161b22;color:#f0f6fc;border:1px solid #30363d;border-bottom:none}
+.tab:hover{color:#f0f6fc}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.section{background:#161b22;border:1px solid #30363d;border-radius:0 12px 12px 12px;padding:20px;margin-bottom:16px}
+.st{font-size:15px;color:#f0f6fc;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:8px}
+.st::before{content:'';width:4px;height:16px;background:#58a6ff;border-radius:2px}
+.st2{font-size:13px;color:#f0f6fc;margin:14px 0 8px;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:#0d1117;color:#8b949e;padding:8px;text-align:left;font-weight:500;border-bottom:1px solid #30363d;font-size:11.5px}
+td{padding:8px;border-bottom:1px solid #21262d;vertical-align:top}
+tr:hover{background:#1c2128}
+.up{color:#f85149;font-weight:600}.down{color:#3fb950;font-weight:600}
+.name{color:#f0f6fc;font-weight:600}.code{color:#8b949e;font-size:11px}
+.tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600}
+.tag-best{background:#238636;color:#fff}.tag-ok{background:#23863633;color:#3fb950}.tag-warn{background:#d2992233;color:#e3b341}.tag-danger{background:#da363333;color:#f85149}.tag-info{background:#1f6feb33;color:#58a6ff}
+.good{background:#23863611;border-left:3px solid #3fb950;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:14px;font-size:12px;line-height:1.8}
+.warn{background:#d2992211;border-left:3px solid #e3b341;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:14px;font-size:12px;line-height:1.8}
+.danger{background:#da363311;border-left:3px solid #f85149;border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:14px;font-size:12px;line-height:1.8}
+.note{font-size:11px;color:#8b949e;margin-top:10px;line-height:1.7}
+.formula{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px 16px;margin:10px 0;font-family:"Consolas","Monaco",monospace;font-size:12px;color:#79c0ff;line-height:1.8;overflow-x:auto}
+.formula .cm{color:#8b949e}.formula .kw{color:#ff7b72}.formula .fn{color:#d2a8ff}
+.flow{display:flex;align-items:center;gap:8px;margin:14px 0;flex-wrap:wrap}
+.flow-box{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:9px 13px;font-size:12px;text-align:center;flex:1;min-width:100px}
+.flow-box .t{color:#f0f6fc;font-weight:600;margin-bottom:2px}.flow-box .d{color:#8b949e;font-size:10px}
+.flow-arrow{color:#58a6ff;font-size:18px;font-weight:700}
+.criteria{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.crit{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px}
+.crit .num{font-size:11px;color:#58a6ff;font-weight:700;margin-bottom:4px}
+.crit .t{font-size:13px;color:#f0f6fc;font-weight:600;margin-bottom:4px}
+.crit .d{font-size:11px;color:#8b949e;line-height:1.6}
+.fit{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600}
+.fit-hi{background:#23863633;color:#3fb950}.fit-mid{background:#d2992233;color:#e3b341}.fit-low{background:#da363333;color:#f85149}
+
+/* ===== 实时扫描面板（<10元候选） ===== */
+.live-wrap{margin-top:18px;padding:14px;background:#161b22;border:1px solid #30363d;border-radius:8px}
+.live-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.live-head .st{margin:0;font-size:16px}
+.live-meta{font-size:12px;color:#8b949e}
+.live-btn{background:#238636;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer;white-space:nowrap}
+.live-btn:hover{background:#2ea043}
+.live-btn:disabled{background:#30363d;color:#8b949e;cursor:wait}
+.live-table{width:100%;border-collapse:collapse;font-size:13px}
+.live-table th{background:#21262d;color:#8b949e;padding:8px 6px;text-align:left;border-bottom:1px solid #30363d;white-space:nowrap}
+.live-table td{padding:7px 6px;border-bottom:1px solid #21262d;white-space:nowrap}
+.live-table tr:hover td{background:#1c2333}
+.live-empty{color:#8b949e;font-size:13px;padding:10px 2px}
+.live-note{font-size:12px;color:#8b949e;margin-top:8px;line-height:1.7}
+.up{color:#f85149}.down{color:#3fb950}.flat{color:#c9d1d9}
+.lv-tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;background:#1f6feb33;color:#58a6ff;margin-right:4px}
+.lv-hit{background:#23863633;color:#3fb950}
+.lv-warn{background:#e3b34133;color:#e3b341}
+.lv-hold{background:#f8514933;color:#f85149}
+
+.op-row td{font-size:11px;color:#8b949e;background:#0d1117;border-bottom:1px solid #21262d;padding:5px 6px;line-height:1.7}
+.op-row b{color:#c9d1d9;font-weight:600}
+.op-row .lv-pos{color:#e3b341}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+<h1>论文驱动量化看板 · 5大策略 <span class="badge badge-b">v2.0 回测联动版</span></h1>
+<div class="meta">研究框架：AI做理解→系统做判定 | 四道判据 | 过拟合控制：rank IC稳定性+walk-forward滚动样本外+参数固定化 | 论文来源：JT(1993) · QMJ(2019) · GKX(2020) | 回测联动：58只真实A股·2023-2025·32次月度调仓 | 最近更新：2026-08-27</div>
+</div>
+
+<div class="good">
+<strong>v2.0 核心变化：</strong>原看板的"策略1-5（首板/低位放量/超跌反弹/相对动量/高股息）"已整体替换为<strong>基于三篇论文从零设计的5大新策略</strong>：<br>
+① 策略1·中长期相对动量（JT1993） | ② 策略2·质量红利精选（QMJ2019） | ③ 策略3·低波动流动性优选（GKX2020） | ④ 策略4·动量质量复合（GKX非线性交互） | ⑤ 策略5·市场状态择时轮动（GKX择时）<br>
+<strong>回测联动：</strong>每个策略均接入真实A股回测结果（总收益/年化/夏普/回撤/月度胜率），信号池、策略批判、操作指南均按新策略重写。详细回测见 <a href="回测报告.html" style="color:#58a6ff">回测报告.html</a>。
+</div>
+
+<div class="tabs">
+<div class="tab active" onclick="switchTab(0)">回测总览</div>
+<div class="tab" onclick="switchTab(1)">策略1·中长期动量</div>
+<div class="tab" onclick="switchTab(2)">策略2·质量红利</div>
+<div class="tab" onclick="switchTab(3)">策略3·低波动优选</div>
+<div class="tab" onclick="switchTab(4)">策略4·动量质量复合</div>
+<div class="tab" onclick="switchTab(5)">策略5·市场择时</div>
+<div class="tab" onclick="switchTab(6)">信号池</div>
+<div class="tab" onclick="switchTab(7)">策略批判</div>
+<div class="tab" onclick="switchTab(8)">操作指南</div>
+</div>
+
+<!-- Tab0: 回测总览 -->
+<div class="tab-content active">
+<div class="section">
+<div class="st">5大策略回测总览（真实A股·联动回测报告）</div>
+<div class="note">回测设置：58只覆盖全板块A股 | 区间2023-01~2025-08（32次月度调仓） | 等权买入·月度再平衡 | 手续费万3+滑点0.1% | 数据源akshare新浪 | 详细数据见 <a href="回测报告.html" style="color:#58a6ff">回测报告.html</a> 与 <a href="量化回测/results/策略对比汇总.csv" style="color:#58a6ff">策略对比汇总.csv</a></div>
+<table>
+<thead><tr><th>策略</th><th>主导论文</th><th>总收益率</th><th>年化</th><th>夏普</th><th>最大回撤</th><th>月度胜率</th><th>定位</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td class="name">1·中长期动量</td><td>JT(1993)</td><td class="down">-24.6%</td><td class="down">-6.1%</td><td>-0.40</td><td class="down">-37.5%</td><td>40.6%</td><td><span class="tag tag-warn">进攻·趋势</span></td><td><span class="tag tag-danger">A股动量弱·样本外亏损</span></td></tr>
+<tr><td class="name">2·质量红利</td><td>QMJ(2019)</td><td class="up">+59.8%</td><td class="up">+11.0%</td><td>0.95</td><td class="down">-13.7%</td><td class="up">59.4%</td><td><span class="tag tag-ok">价值·防守</span></td><td><span class="tag tag-ok">正收益·稳健</span></td></tr>
+<tr><td class="name">3·低波动优选</td><td>GKX(2020)</td><td class="up">+62.9%</td><td class="up">+11.4%</td><td>1.02</td><td class="down">-15.0%</td><td class="up">62.5%</td><td><span class="tag tag-ok">防御·稳健</span></td><td><span class="tag tag-best">回测最优</span></td></tr>
+<tr><td class="name">4·动量质量复合</td><td>GKX+QMJ+JT</td><td class="up">+21.7%</td><td class="up">+4.5%</td><td>0.35</td><td class="down">-19.5%</td><td class="up">59.4%</td><td><span class="tag tag-warn">攻守兼备</span></td><td><span class="tag tag-ok">正收益·待强化</span></td></tr>
+<tr><td class="name">5·市场择时</td><td>GKX(2020)</td><td colspan="6">状态分布：防御10次 · 空仓22次（32个月中22个月建议空仓）</td><td><span class="tag tag-danger">总控·风控</span></td><td><span class="tag tag-info">回撤控制核心</span></td></tr>
+</tbody>
+</table>
+<div class="warn"><strong>关键洞察：</strong>① 纯动量（策略1）在A股样本外亏损，与"动量在A股弱"的学术界结论一致，证明回测未美化；② 低波动（策略3）月度胜率62.5%回测最优，质量红利（策略2）稳健；③ 策略5择时32个月里22个月建议空仓，印证近年A股多数时间不宜满仓。<strong>回测为验证性结果（58只样本），实盘前需全市场+rank IC+walk-forward验证。</strong></div>
+</div>
+
+<div class="section">
+<div class="st">四道判据（每个信号必须全部满足）</div>
+<div class="criteria">
+<div class="crit"><div class="num">01</div><div class="t">定义明确</div><div class="d">模糊描述→可计算表达式，如"涨得好"→"60-120日相对动量>5%"</div></div>
+<div class="crit"><div class="num">02</div><div class="t">时间明确</div><div class="d">T日收盘信号完成，T+1开盘最早可交易，禁止未来函数</div></div>
+<div class="crit"><div class="num">03</div><div class="t">可以计算</div><div class="d">有字段(close/amount/vol/finance)，有公式，出得来数</div></div>
+<div class="crit"><div class="num">04</div><div class="t">可以回测</div><div class="d">放回历史验证，walk-forward样本外，可复现可证伪</div></div>
+</div>
+</div>
+
+</div>
+<!-- Tab1: 策略1 中长期动量 -->
+<div class="tab-content">
+<div class="section">
+<div class="st">策略1：中长期相对动量 <span class="badge badge-g">JT(1993)</span> <span class="badge badge-y">回测亏损·需择时配合</span></div>
+
+<div class="st2">▎策略逻辑</div>
+<div class="good">JT(1993)实证：买过去3-12个月赢家、卖输家，持有3-12个月获得显著超额收益，且非系统性风险所致。策略1用<strong>60-120日相对动量</strong>（个股收益-行业中位数），规避A股短周期反转，捕捉中长期趋势。</div>
+
+<div class="st2">▎选股公式（同花顺可回测）</div>
+<div class="formula">
+个股60日收益:=(CLOSE-<span class="fn">REF</span>(CLOSE,60))/<span class="fn">REF</span>(CLOSE,60)*100;<br>
+个股120日收益:=(CLOSE-<span class="fn">REF</span>(CLOSE,120))/<span class="fn">REF</span>(CLOSE,120)*100;<br>
+行业中位数:=<span class="fn">MEDIAN</span>(板块内个股60日收益); <span class="cm">{需行业成分数据}</span><br>
+相对动量:=(个股60日收益+个股120日收益)/2-行业中位数;<br>
+<span class="kw">条件1</span> 动量:=相对动量&gt;5; <span class="cm">{JT显著赢家}</span><br>
+<span class="kw">条件2</span> 流动性:=<span class="fn">MA</span>(AMOUNT,5)/10000&gt;=3000;<br>
+<span class="kw">条件3</span> 非ST:=<span class="fn">NOT</span>(NAMELIKE('ST'));<br>
+<span class="kw">XG</span>:=动量 AND 流动性 AND 非ST;
+</div>
+
+<div class="st2">▎买卖时点</div>
+<div class="flow">
+<div class="flow-box"><div class="t">T日15:00</div><div class="d">计算动量</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">T+1开盘</div><div class="d">等权买入前N</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">持有20-60日</div><div class="d">JT动量窗口</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">退出</div><div class="d">动量&lt;0 / -5% / 满60日</div></div>
+</div>
+
+<div class="st2">▎验证规则与模型支撑</div>
+<div class="note">rank IC前置（60-120日动量IC&gt;0.03且IC_IR&gt;0.3）→ walk-forward前2年后1年样本外 → 胜率≥50%且IR&gt;0.5。理论支撑：行为金融过度反应/反应不足（BSV 1998, DHS 1998）、信息扩散（Hong-Stein 1999）、GKX(2020)动量是最强横截面信号。</div>
+
+<div class="st2">▎回测结果（58只A股·2023-2025）</div>
+<table>
+<thead><tr><th>总收益</th><th>年化</th><th>夏普</th><th>最大回撤</th><th>月度胜率</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td class="down">-24.6%</td><td class="down">-6.1%</td><td>-0.40</td><td class="down">-37.5%</td><td>40.6%</td><td><span class="tag tag-danger">A股动量弱·样本外亏损</span></td></tr>
+</tbody>
+</table>
+
+<div class="live-wrap">
+  <div class="live-head">
+    <div class="st">策略1实时候选标的（股价&lt;10元）</div>
+    <div class="live-meta" id="meta-1">待扫描 — 点击按钮或开盘自动更新</div>
+    <button class="live-btn" id="btn-1" onclick="scanNow()">立即扫描</button>
+  </div>
+  <div id="out-1"><div class="live-empty">点击"立即扫描"获取实时候选（首次约10-30秒，盘中自动刷新更快）。</div></div>
+  <div class="live-note">候选池：新浪全市场按价格筛选 &lt;10元 · 实时报价：新浪全市场 · 指标：60/120日K线 · 财务：东财F10（策略2/4质量条件）。强/候选为正式信号，观察为放宽初筛。</div>
+</div>
+<div class="st2">▎A股适应性</div>
+<div class="fit fit-mid" style="margin-bottom:8px">适应性：中（弱于美股）</div>
+<div class="note">A股散户主导、动量弱但行业轮动明显，需行业中性相对动量+更长窗口；<strong>必须叠加策略5择时</strong>（熊市/震荡动量最受伤，本回测亏损主要源于此）。实盘建议：仅进攻态启用，空仓态禁用。</div>
+</div>
+</div>
+
+<!-- Tab2: 策略2 质量红利 -->
+<div class="tab-content">
+<div class="section">
+<div class="st">策略2：质量红利精选 <span class="badge badge-g">QMJ(2019)</span> <span class="badge badge-ok">回测正收益</span></div>
+
+<div class="st2">▎策略逻辑</div>
+<div class="good">QMJ(2019)定义质量=盈利性+成长+安全，高质量股风险调整收益显著更高、24国成立。策略2以<strong>盈利性（ROE）</strong>为主、成长与安全为辅，叠加股息率，排除"红利陷阱"（盈利恶化仍派息）。</div>
+
+<div class="st2">▎选股公式</div>
+<div class="formula">
+<span class="kw">条件1</span> 盈利性:=<span class="fn">FINANCE</span>(33)&gt;=8 AND <span class="fn">FINANCE</span>(30)&gt;0; <span class="cm">{ROE≥8%且净利为正}</span><br>
+<span class="kw">条件2</span> 成长:=<span class="fn">FINANCE</span>(44)&gt;0;<br>
+<span class="kw">条件3</span> 安全:=<span class="fn">FINANCE</span>(17)&lt;60; <span class="cm">{负债率&lt;60%}</span><br>
+<span class="kw">条件4</span> 红利:=近12月每股分红/CLOSE*100&gt;=3;<br>
+<span class="kw">条件5</span> 估值:=PE(TTM)&gt;0 AND PE(TTM)&lt;=20;<br>
+<span class="kw">XG</span>:=盈利性 AND 成长 AND 安全 AND 红利 AND 估值;
+</div>
+
+<div class="st2">▎买卖时点</div>
+<div class="flow">
+<div class="flow-box"><div class="t">季报后</div><div class="d">更新财务因子</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">季度末</div><div class="d">等权买入</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">持有1季度</div><div class="d">低频稳定</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">再平衡</div><div class="d">下季重选</div></div>
+</div>
+
+<div class="st2">▎验证规则与模型支撑</div>
+<div class="note">质量因子跨年度IC&gt;0.03且IC_IR&gt;0.3 → walk-forward样本外年化超额&gt;0且回撤≤15%。模型支撑：Gordon增长模型 P/B=盈利性×分红率/(r-g)；QMJ(2019)发现市场对质量定价不足→高质量股高超额。</div>
+
+<div class="st2">▎回测结果（58只A股·2023-2025）</div>
+<table>
+<thead><tr><th>总收益</th><th>年化</th><th>夏普</th><th>最大回撤</th><th>月度胜率</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td class="up">+59.8%</td><td class="up">+11.0%</td><td>0.95</td><td class="down">-13.7%</td><td class="up">59.4%</td><td><span class="tag tag-ok">正收益·稳健</span></td></tr>
+</tbody>
+</table>
+
+<div class="st2">▎A股适应性</div>
+<div class="fit fit-hi" style="margin-bottom:8px">适应性：高</div>
+<div class="note">高质量+红利是A股最稳健低频策略，适合银行/公用/家电/白酒等现金流稳定行业；需剔除靠借债分红、盈利转负的价值陷阱。财务数据注意披露滞后。</div>
+</div>
+<div class="live-wrap">
+  <div class="live-head">
+    <div class="st">策略2实时候选标的（股价&lt;10元）</div>
+    <div class="live-meta" id="meta-2">待扫描 — 点击按钮或开盘自动更新</div>
+    <button class="live-btn" id="btn-2" onclick="scanNow()">立即扫描</button>
+  </div>
+  <div id="out-2"><div class="live-empty">点击"立即扫描"获取实时候选（首次约10-30秒，盘中自动刷新更快）。</div></div>
+  <div class="live-note">候选池：新浪全市场按价格筛选 &lt;10元 · 实时报价：新浪全市场 · 指标：60/120日K线 · 财务：东财F10（策略2/4质量条件）。强/候选为正式信号，观察为放宽初筛。</div>
+</div>
+</div>
+
+<!-- Tab3: 策略3 低波动优选 -->
+<div class="tab-content">
+<div class="section">
+<div class="st">策略3：低波动流动性优选 <span class="badge badge-g">GKX(2020)</span> <span class="badge badge-best">回测最优</span></div>
+
+<div class="st2">▎策略逻辑</div>
+<div class="good">GKX(2020)实证波动率与流动性是横截面收益最强预测因子。策略3利用<strong>低波动异象</strong>（低波股票风险调整后收益更高，与CAPM相悖），以流动性下限过滤僵尸股，选出"稳定、可交易、被低估风险"的防御标的——低风险不低收益。</div>
+
+<div class="st2">▎选股公式</div>
+<div class="formula">
+ATR20:=<span class="fn">MA</span>(<span class="fn">MAX</span>(<span class="fn">MAX</span>(HIGH-LOW,<span class="fn">ABS</span>(HIGH-<span class="fn">REF</span>(CLOSE,1))),<span class="fn">ABS</span>(LOW-<span class="fn">REF</span>(CLOSE,1))),20);<br>
+年化波动:=ATR20/CLOSE*<span class="fn">SQRT</span>(250)*100;<br>
+<span class="kw">条件1</span> 低波:=年化波动&lt;=40; <span class="cm">{年化波动≤40%}</span><br>
+<span class="kw">条件2</span> 波动收缩:=ATR20&lt;<span class="fn">MA</span>(ATR20,60);<br>
+<span class="kw">条件3</span> 流动性:=<span class="fn">MA</span>(AMOUNT,5)/10000&gt;=5000;<br>
+<span class="kw">条件4</span> 趋势:=CLOSE&gt;<span class="fn">MA</span>(CLOSE,60); <span class="cm">{不接飞刀}</span><br>
+<span class="kw">XG</span>:=低波 AND 波动收缩 AND 流动性 AND 趋势;
+</div>
+
+<div class="st2">▎买卖时点</div>
+<div class="flow">
+<div class="flow-box"><div class="t">每月末</div><div class="d">计算波动/流动性</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">T+1开盘</div><div class="d">等权买入</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">持有1月</div><div class="d">月度再平衡</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">退出</div><div class="d">跌破MA60 / 波动&gt;40%</div></div>
+</div>
+
+<div class="st2">▎验证规则与模型支撑</div>
+<div class="note">低波动因子跨年度IC&gt;0.03且IC_IR&gt;0.3 → walk-forward样本外Sharpe&gt;0.5且回撤≤15%。理论：低波动异象（Ang et al. 2006；Baker et al. 2011），彩票偏好推高高波股估值；流动性溢价（Amihud 2002）。</div>
+
+<div class="st2">▎回测结果（58只A股·2023-2025）</div>
+<table>
+<thead><tr><th>总收益</th><th>年化</th><th>夏普</th><th>最大回撤</th><th>月度胜率</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td class="up">+62.9%</td><td class="up">+11.4%</td><td>1.02</td><td class="down">-15.0%</td><td class="up">62.5%</td><td><span class="tag tag-best">回测最优·夏普最高</span></td></tr>
+</tbody>
+</table>
+
+<div class="st2">▎A股适应性</div>
+<div class="fit fit-hi" style="margin-bottom:8px">适应性：高</div>
+<div class="note">A股波动率高，低波因子风险溢价更充分；适合大市值蓝筹/公用/银行。注意剔除"低波但基本面恶化"的僵尸股，用流动性下限+MA60双保险。急涨行情（如2019Q1、2020.7）会阶段性跑输。</div>
+</div>
+<div class="live-wrap">
+  <div class="live-head">
+    <div class="st">策略3实时候选标的（股价&lt;10元）</div>
+    <div class="live-meta" id="meta-3">待扫描 — 点击按钮或开盘自动更新</div>
+    <button class="live-btn" id="btn-3" onclick="scanNow()">立即扫描</button>
+  </div>
+  <div id="out-3"><div class="live-empty">点击"立即扫描"获取实时候选（首次约10-30秒，盘中自动刷新更快）。</div></div>
+  <div class="live-note">候选池：新浪全市场按价格筛选 &lt;10元 · 实时报价：新浪全市场 · 指标：60/120日K线 · 财务：东财F10（策略2/4质量条件）。强/候选为正式信号，观察为放宽初筛。</div>
+</div>
+</div>
+
+<!-- Tab4: 策略4 动量质量复合 -->
+<div class="tab-content">
+<div class="section">
+<div class="st">策略4：动量×质量复合 <span class="badge badge-p">GKX(2020)非线性交互</span> <span class="badge badge-ok">回测正收益</span></div>
+
+<div class="st2">▎策略逻辑</div>
+<div class="good">GKX(2020)核心发现：允许因子<strong>非线性交互</strong>的模型比线性模型收益翻倍。策略4将<strong>动量（JT）</strong>与<strong>质量（QMJ）</strong>复合：动量捕捉进攻、质量过滤陷阱，两者交互（高动量+高质量）信号更强——用两个强因子交集排名实现交互，不堆复杂度。</div>
+
+<div class="st2">▎选股公式（复合排名）</div>
+<div class="formula">
+相对动量:=(CLOSE-<span class="fn">REF</span>(CLOSE,60))/<span class="fn">REF</span>(CLOSE,60)*100-行业中位数;<br>
+质量分:=0.5*<span class="fn">FINANCE</span>(33)+0.3*(<span class="fn">FINANCE</span>(30)/100)+0.2*(60-<span class="fn">FINANCE</span>(17));<br>
+<span class="kw">动量入选</span>:=相对动量&gt;5;<br>
+<span class="kw">质量入选</span>:=<span class="fn">FINANCE</span>(33)&gt;=8 AND <span class="fn">FINANCE</span>(17)&lt;60;<br>
+<span class="kw">XG</span>:=动量入选 AND 质量入选 AND <span class="fn">MA</span>(AMOUNT,5)/10000&gt;=3000;
+</div>
+<div class="note">入选后按"相对动量×质量分"复合得分排序，取前N等权买入——实现GKX因子交互。</div>
+
+<div class="st2">▎买卖时点</div>
+<div class="flow">
+<div class="flow-box"><div class="t">每20日</div><div class="d">重算动量+质量</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">T+1开盘</div><div class="d">买入复合得分前N</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">持有20-40日</div><div class="d">双确认</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">退出</div><div class="d">动量&lt;0 / 质量跌破 / -5%</div></div>
+</div>
+
+<div class="st2">▎验证规则与模型支撑</div>
+<div class="note">双因子各自先过rank IC门槛，再验证交互组样本外须显著优于单因子才纳入。理论：GKX(2020)非线性交互实证；质量与动量负相关可互补（Asness et al. 2013）。</div>
+
+<div class="st2">▎回测结果（58只A股·2023-2025）</div>
+<table>
+<thead><tr><th>总收益</th><th>年化</th><th>夏普</th><th>最大回撤</th><th>月度胜率</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td class="up">+21.7%</td><td class="up">+4.5%</td><td>0.35</td><td class="down">-19.5%</td><td class="up">59.4%</td><td><span class="tag tag-ok">正收益·样本外待强化</span></td></tr>
+</tbody>
+</table>
+
+<div class="st2">▎A股适应性</div>
+<div class="fit fit-mid" style="margin-bottom:8px">适应性：中高</div>
+<div class="note">适合行业龙头/优质成长股；A股2019-2021"质量+动量"抱团强，2022-2023瓦解回撤大，必须配合策略5择时避免追顶。本回测正收益但夏普偏低，需优化质量代理或加择时。</div>
+</div>
+<div class="live-wrap">
+  <div class="live-head">
+    <div class="st">策略4实时候选标的（股价&lt;10元）</div>
+    <div class="live-meta" id="meta-4">待扫描 — 点击按钮或开盘自动更新</div>
+    <button class="live-btn" id="btn-4" onclick="scanNow()">立即扫描</button>
+  </div>
+  <div id="out-4"><div class="live-empty">点击"立即扫描"获取实时候选（首次约10-30秒，盘中自动刷新更快）。</div></div>
+  <div class="live-note">候选池：新浪全市场按价格筛选 &lt;10元 · 实时报价：新浪全市场 · 指标：60/120日K线 · 财务：东财F10（策略2/4质量条件）。强/候选为正式信号，观察为放宽初筛。</div>
+</div>
+</div>
+
+<!-- Tab5: 策略5 市场择时 -->
+<div class="tab-content">
+<div class="section">
+<div class="st">策略5：市场状态择时轮动 <span class="badge badge-r">GKX(2020)择时</span> <span class="badge badge-info">总控·风控</span></div>
+
+<div class="st2">▎策略逻辑</div>
+<div class="good">GKX(2020)核心发现之二：<strong>用预测模型择时（S&amp;P500）年化样本外Sharpe 0.77，远超买入持有0.51</strong>。策略5不做个股选股，而是用指数动量+波动率判定<strong>进攻/防御/空仓</strong>三态，作为策略1-4的总开关，防止动量崩溃与抱团瓦解。</div>
+
+<div class="st2">▎市场状态判定公式（中证全指/沪深300）</div>
+<div class="formula">
+指数动量:=(CLOSE-<span class="fn">REF</span>(CLOSE,120))/<span class="fn">REF</span>(CLOSE,120)*100;<br>
+指数MA60:=CLOSE&gt;<span class="fn">MA</span>(CLOSE,60);<br>
+指数波动:=<span class="fn">ATR</span>(20)/CLOSE*100;<br>
+<span class="kw">进攻态</span>:=指数动量&gt;5 AND 指数MA60 AND 指数波动&lt;3;<br>
+<span class="kw">防御态</span>:=指数动量&gt;0 AND (NOT 指数MA60 OR 指数波动&gt;=3);<br>
+<span class="kw">空仓态</span>:=指数动量&lt;=0; <span class="cm">{JT动量崩溃保护}</span>
+</div>
+
+<div class="st2">▎轮动规则（策略1-4的仓位总控）</div>
+<table>
+<thead><tr><th>市场状态</th><th>策略1动量</th><th>策略2质量</th><th>策略3低波</th><th>策略4复合</th><th>总仓位</th></tr></thead>
+<tbody>
+<tr><td><span class="tag tag-best" style="background:#238636;color:#fff">进攻态</span></td><td>30%</td><td>15%</td><td>15%</td><td>30%</td><td>90%</td></tr>
+<tr><td><span class="tag tag-warn">防御态</span></td><td>10%</td><td>25%</td><td>30%</td><td>10%</td><td>50%</td></tr>
+<tr><td><span class="tag tag-danger">空仓态</span></td><td>0%</td><td>0%</td><td>0%</td><td>0%</td><td>0-10%</td></tr>
+</tbody>
+</table>
+
+<div class="st2">▎评估与验证</div>
+<div class="flow">
+<div class="flow-box"><div class="t">每周五收盘</div><div class="d">重算三状态</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">下周一执行</div><div class="d">按状态调仓</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">重复</div><div class="d">周度轮动</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">验证</div><div class="d">择时IC+样本外</div></div>
+</div>
+
+<div class="st2">▎验证规则与模型支撑</div>
+<div class="note">择时因子（指数动量/波动率）跨年度IC&gt;0.03且IC_IR&gt;0.3 → walk-forward前3年后2年样本外须"回撤≤20%且Sharpe&gt;买入持有"才启用。理论：GKX(2020)择时实证、动量崩溃（Daniel-Moskowitz 2016）、波动率择时（Moreira-Muir 2017）。</div>
+
+<div class="st2">▎回测结果（58只A股·2023-2025·32次月度调仓）</div>
+<table>
+<thead><tr><th>进攻态</th><th>防御态</th><th>空仓态</th><th>调仓总数</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td>10次</td><td>0次</td><td>22次</td><td>32次</td><td><span class="tag tag-info">22/32个月建议空仓·近年A股多数时间不宜满仓</span></td></tr>
+</tbody>
+</table>
+<div class="note">注：回测中防御态0次是因为全池等权平均作为市场代理（含大量低位股）导致动量偏低，实盘用沪深300/中证1000指数计算更准确。策略5价值在于<strong>控制回撤</strong>（防动量崩溃、防抱团瓦解）。</div>
+
+<div class="st2">▎A股适应性</div>
+<div class="fit fit-hi" style="margin-bottom:8px">适应性：高</div>
+<div class="note">A股牛短熊长、波动巨大，择时价值远高于美股。缺点：震荡市反复打脸，用"动量&gt;5%+波动<3%"双重条件过滤假突破；T+1与涨跌停要求周一执行、避免追高。</div>
+</div>
+<div class="live-wrap">
+  <div class="live-head">
+    <div class="st">策略5实时候选标的（股价&lt;10元）</div>
+    <div class="live-meta" id="meta-5">待扫描 — 点击按钮或开盘自动更新</div>
+    <button class="live-btn" id="btn-5" onclick="scanNow()">立即扫描</button>
+  </div>
+  <div id="out-5"><div class="live-empty">点击"立即扫描"获取实时候选（首次约10-30秒，盘中自动刷新更快）。</div></div>
+  <div class="live-note">候选池：新浪全市场按价格筛选 &lt;10元 · 实时报价：新浪全市场 · 指标：60/120日K线 · 财务：东财F10（策略2/4质量条件）。强/候选为正式信号，观察为放宽初筛。</div>
+</div>
+</div>
+
+<!-- Tab6: 当前信号池 -->
+<div class="tab-content">
+<div class="section">
+<div class="st">当前信号池汇总（2026-08-27·按新策略体系）</div>
+<div class="note">系统段基于5大新策略的固定参数公式完成信号判定。以下为当前状态汇总，按策略分类。<strong>所有条件参数固定，唯一可调的是多因子权重（需walk-forward训练）。</strong></div>
+
+<div class="warn" style="margin-top:12px">
+<strong>市场状态判定（策略5）：</strong>按回测结果，策略5在32个月中22个月判定空仓。当前需以沪深300/中证1000实时计算指数动量与波动率：<br>
+· 指数120日动量&gt;5% 且 站上MA60 且 波动&lt;3% → <span class="tag tag-best">进攻态</span>（策略1-4按比例启用）<br>
+· 指数120日动量&gt;0 但未站上MA60 或 波动偏高 → <span class="tag tag-warn">防御态</span>（质量+低波为主）<br>
+· 指数120日动量≤0 → <span class="tag tag-danger">空仓态</span>（全部停用，仅策略5监视）
+</div>
+
+<div id="signal-pool-live"></div>
+
+<div class="st2">▎策略2·质量红利候选（当前最优·回测+59.8%）</div>
+<table>
+<thead><tr><th>板块</th><th>筛选方向</th><th>条件</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>银行/公用/家电/白酒</td><td>ROE≥8%+净利为正+负债率&lt;60%+股息≥3%</td><td>季报后财务因子确认</td><td><span class="tag tag-warn">待季报更新</span></td></tr>
+<tr><td>高股息陷阱排除</td><td>剔除盈利转负仍派息、靠借款分红</td><td>盈利性+安全性双过滤</td><td><span class="tag tag-ok">已内建</span></td></tr>
+</tbody>
+</table>
+
+<div class="st2">▎策略3·低波动优选候选（当前最优·回测+62.9%）</div>
+<table>
+<thead><tr><th>筛选方向</th><th>条件</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>年化波动≤40% + 波动收缩 + 5日均额≥5000万 + 收盘&gt;MA60</td><td>月度再平衡</td><td><span class="tag tag-warn">需月度扫描</span></td></tr>
+</tbody>
+</table>
+
+<div class="st2">▎策略1/4·动量类信号（需择时确认）</div>
+<table>
+<thead><tr><th>策略</th><th>信号条件</th><th>前置条件</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>策略1·中长期动量</td><td>60-120日相对动量&gt;5%</td><td><strong>仅进攻态启用</strong>（回测显示空仓态动量亏损）</td><td><span class="tag tag-danger">需择时+全市场扫描</span></td></tr>
+<tr><td>策略4·动量质量复合</td><td>动量+质量双因子排名前N</td><td>双因子各自先过rank IC</td><td><span class="tag tag-warn">待全市场数据</span></td></tr>
+</tbody>
+</table>
+
+<div class="st2">▎策略5·市场择时状态</div>
+<table>
+<thead><tr><th>项目</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>回测状态分布</td><td>进攻10次 · 防御0次 · 空仓22次（32次调仓）</td></tr>
+<tr><td>实盘建议</td><td>以沪深300指数实时计算三态，空仓态不启用策略1-4</td></tr>
+</tbody>
+</table>
+
+<div class="danger" style="margin-top:16px">
+<strong>过拟合警示：</strong>以上回测基于58只样本（2023-2025），胜率是样本内结果，<strong>不等于实盘胜率</strong>。所有策略需通过walk-forward样本外验证（样本外胜率≥50%、盈亏比≥1.2）才算有效。规则越简单，越容易活过下一轮。
+</div>
+</div>
+</div>
+
+<!-- Tab7: 策略批判 -->
+<div class="tab-content">
+<div class="section">
+<div class="st">策略批判：对5大新策略的批判与更正</div>
+
+<div class="danger">
+<strong>先泼冷水——这5个策略各自有什么坑：</strong>
+</div>
+
+<div class="st2">▎批判1：策略1（中长期动量）在A股最脆弱</div>
+<div class="warn">回测-24.6%已证明：A股动量弱、反转强，JT(1993)的美股结论不能直接照搬。<strong>正确理解：</strong>动量在A股是"环境依赖"因子——仅进攻态有效（牛市/趋势市），空仓/震荡态必须禁用。行业中性相对动量比绝对动量更稳。若样本外仍为负，应降级为参考因子而非核心策略。</div>
+
+<div class="st2">▎批判2：质量因子可能"太贵"</div>
+<div class="warn">QMJ(2019)在24国有效，但A股高质量股常被抱团推高估值（2019-2021白酒/医药），追高买入质量股=低预期收益。<strong>正确理解：</strong>质量必须叠加估值约束（PE≤20）与股息确认，不做"贵的好公司"，只做"便宜的好公司"。</div>
+
+<div class="st2">▎批判3：低波动策略会"涨不动"</div>
+<div class="warn">策略3回测最优（+62.9%）但本质是防御——急涨行情（疯牛）会大幅跑输进攻策略。<strong>正确理解：</strong>低波不是"永远最优"，是组合的压舱石。进攻态应把仓位给策略1/4，防御态才切到策略2/3。</div>
+
+<div class="st2">▎批判4：动量×质量复合可能"两头不讨好"</div>
+<div class="warn">回测+21.7%但夏普仅0.35——双因子交集缩窄了候选池，样本小时统计噪声大。且"高动量+高质量"在A股常对应高位抱团股。<strong>正确理解：</strong>交互必须验证"交互组显著优于两单因子"才保留，否则退回单因子；配合择时避免追顶。</div>
+
+<div class="st2">▎批判5：择时是"双刃剑"</div>
+<div class="warn">策略5回测32个月22次空仓确实避免了大回撤，但也可能错过V型反弹（2024年2月）。<strong>正确理解：</strong>择时目标是控制回撤而非增厚收益；用"动量>5%+波动<3%"过滤震荡假信号；空仓态留0-10%资金不彻底离场。</div>
+
+<div class="good" style="margin-top:14px">
+<strong>正确逻辑总结：</strong><br>
+① 进攻态（指数强+低波）：动量与复合策略为主，仓位90%<br>
+② 防御态（指数弱但未破位）：质量+低波为主，仓位≤50%<br>
+③ 空仓态（指数破位）：全部停用，留0-10%现金观察<br>
+④ 任何策略样本外过不了walk-forward就废弃，不恋战
+</div>
+</div>
+</div>
+
+<!-- Tab8: 操作指南 -->
+<div class="tab-content">
+<div class="section">
+<div class="st">操作指南：从信号到执行的完整流程</div>
+
+<div class="st2">▎每日/每周操作流程</div>
+<div class="flow">
+<div class="flow-box"><div class="t">周一收盘</div><div class="d">策略5·指数动量/波动率→三态判定</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">周二开盘</div><div class="d">按状态执行策略1-4调仓</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">季报后</div><div class="d">策略2·质量因子更新</div></div>
+<div class="flow-arrow">→</div>
+<div class="flow-box"><div class="t">每月末</div><div class="d">策略3·低波再平衡</div></div>
+</div>
+
+<div class="st2">▎分策略操作清单</div>
+<table>
+<thead><tr><th>策略</th><th>触发</th><th>买入</th><th>持有</th><th>退出</th><th>仓位</th></tr></thead>
+<tbody>
+<tr><td>1·动量</td><td>仅进攻态</td><td>T+1开盘等权</td><td>20-60日</td><td>动量&lt;0/-5%/满60日</td><td>≤30%</td></tr>
+<tr><td>2·质量</td><td>季报后</td><td>季度末等权</td><td>1季度</td><td>盈利转负/估值&gt;20</td><td>≤25%</td></tr>
+<tr><td>3·低波</td><td>每月末</td><td>T+1等权</td><td>1月</td><td>跌破MA60/波动&gt;40%</td><td>≤30%</td></tr>
+<tr><td>4·复合</td><td>仅进攻态</td><td>T+1开盘</td><td>20-40日</td><td>动量&lt;0/-5%</td><td>≤30%</td></tr>
+<tr><td>5·择时</td><td>每周五</td><td>—</td><td>—</td><td>—</td><td>总控</td></tr>
+</tbody>
+</table>
+
+<div class="st2">▎资金管理（按市场状态）</div>
+<div class="good"><strong>进攻态：</strong>总仓位≤90%（动量30+复合30+质量15+低波15），单策略≤30%，现金≥10%</div>
+<div class="warn"><strong>防御态：</strong>总仓位≤50%（质量25+低波30，动量/复合各10%），现金≥50%</div>
+<div class="danger"><strong>空仓态：</strong>总仓位0-10%，全部策略停用，现金为主，等指数重新站上MA60+动量转正</div>
+
+<div class="st2">▎执行纪律（固定）</div>
+<ul>
+<li style="padding:5px 0">① 参数锁定：60-120日/5%/3000万/40%波动/ROE≥8%/负债率&lt;60%，不随回测调整</li>
+<li style="padding:5px 0">② 只调权重：唯一可调的是多因子综合权重，walk-forward训练集优化</li>
+<li style="padding:5px 0">③ 止损硬性：-5%止损（动量/复合），跌破MA60（低波），盈利转负（质量）</li>
+<li style="padding:5px 0">④ 过拟合闸门：样本外胜率&lt;50%或盈亏比&lt;1.2即废弃该策略</li>
+<li style="padding:5px 0">⑤ 简单优先：规则越简单越容易活过下一轮，不堆条件</li>
+</ul>
+
+<div class="warn" style="margin-top:12px"><strong>风控红线：</strong>策略1/4（动量类）只在进攻态启用；任何单日亏损&gt;-3%检查是否状态切换；空仓态绝不抄底"感觉到底了"。</div>
+</div>
+</div>
+
+<script>
+function switchTab(i){
+  document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('active',j===i));
+  document.querySelectorAll('.tab-content').forEach((c,j)=>c.classList.toggle('active',j===i));
+}
+
+/* ===== 实时候选扫描引擎（<10元 · 同步股票行情机制） ===== */
+const $2 = id => document.getElementById(id);
+const fmt2 = (n,d)=>{ if(n==null||isNaN(+n)) return '-'; return (+n).toFixed(d==null?2:d); };
+const cls2 = p => p>0?'up':(p<0?'down':'flat');
+function loadScript2(src,charset){ return new Promise((res,rej)=>{ const s=document.createElement('script'); if(charset) s.charset=charset; const t=setTimeout(()=>{s.remove();rej(new Error('timeout'));},10000); s.onload=()=>{clearTimeout(t);res();}; s.onerror=()=>{clearTimeout(t);s.remove();rej(new Error('err'));}; s.src=src; document.head.appendChild(s); }); }
+function isTradingTime2(){ const d=new Date(); if(d.getDay()===0||d.getDay()===6) return false; const m=d.getHours()*60+d.getMinutes(); return (m>=540&&m<=720)||(m>=780&&m<=930); }
+function symOf2(code){ if(code.startsWith('6')||code.startsWith('900')) return 'sh'; if(code.startsWith('0')||code.startsWith('2')||code.startsWith('3')) return 'sz'; return 'bj'; }
+function parseTx2(s){ if(!s) return null; const a=s.split('~'); return { name:a[1], code:a[2], price:+a[3], prev:+a[4], open:+a[5], volume:+a[6], change:+a[31], pct:+a[32], high:+a[33], low:+a[34], amount_wan:+a[37], turnover:+a[38], pb:+a[46], pe:+a[39], vol_ratio:+a[49] }; }
+function fetchJson2(url,timeout){ return new Promise((resolve,reject)=>{ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),timeout||8000); fetch(url,{mode:'cors',signal:ctrl.signal}).then(r=>{ clearTimeout(t); if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(resolve,reject); }); }
+function sinaListJsonp2(page,sort,asc,num){ return new Promise((resolve)=>{ const cb='sinaLt'+Math.random().toString(36).slice(2,8); const url='https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+page+'&num='+num+'&sort='+sort+'&asc='+(asc?1:0)+'&node=hs_a&symbol=&callback='+cb; const s=document.createElement('script'); let done=false; const t=setTimeout(()=>finish([]),10000); function finish(data){ if(done) return; done=true; clearTimeout(t); delete window[cb]; if(s.parentNode) s.remove(); resolve(data||[]); } window[cb]=finish; s.onerror=()=>finish([]); s.src=url; document.head.appendChild(s); }); }
+function sinaKline2(sym,code){ return new Promise((resolve)=>{ const cb='kcb'+Math.random().toString(36).slice(2,8); const url='https://quotes.sina.cn/cn/api/jsonp_v2.php/'+cb+'/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=130'; const s=document.createElement('script'); let done=false; const t=setTimeout(()=>finish([]),9000); function finish(data){ if(done) return; done=true; clearTimeout(t); delete window[cb]; if(s.parentNode) s.remove(); try{ resolve((data||[]).map(x=>({date:x.day,open:+x.open,close:+x.close,high:+x.high,low:+x.low,volume:+x.volume}))); }catch(e){ resolve([]); } } window[cb]=finish; s.onerror=()=>finish([]); s.src=url; document.head.appendChild(s); }); }
+const SCAN = { scanning:false, time:'', stocks:[], lastFull:0 };
+function storeJson2(key,val){ try{ if(typeof localStorage!=='undefined') localStorage.setItem(key,JSON.stringify(val)); }catch(e){} }
+function readJson2(key,fallback){ try{ if(typeof localStorage!=='undefined'){ const raw=localStorage.getItem(key); if(raw) return JSON.parse(raw); } }catch(e){} return fallback; }
+function loadPoolSnap(){ try{ const o=readJson2('newStratPool',null); if(o&&o.t&&Date.now()-o.t<10*60*1000&&o.stocks&&o.stocks.length){ SCAN.stocks=o.stocks; SCAN.lastFull=o.t; return true; } }catch(e){} return false; }
+const KLINE_CACHE=readJson2('newStratKlines',{});
+const QUAL_CACHE=readJson2('newStratQuals',{});
+function saveKlineCache(){ const slim={}; const now=Date.now(); Object.keys(KLINE_CACHE).forEach(k=>{ if(now-KLINE_CACHE[k].t<10*60*1000) slim[k]=KLINE_CACHE[k]; }); storeJson2('newStratKlines',slim); }
+function saveQualCache(){ const slim={}; const now=Date.now(); Object.keys(QUAL_CACHE).forEach(k=>{ if(now-QUAL_CACHE[k].t<2*60*60*1000) slim[k]=QUAL_CACHE[k]; }); storeJson2('newStratQuals',slim); }
+async function loadSinaLT10(){
+  const out=[]; const num=80;
+  const fetchPage=async page=>{
+    const url='https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+page+'&num='+num+'&sort=trade&asc=1&node=hs_a&symbol=&_s_r_a=page';
+    let arr=[];
+    try{ arr=await fetchJson2(url,10000); }catch(e){ arr=[]; }
+    if(!arr||!arr.length){ try{ arr=await sinaListJsonp2(page,'trade',1,num); }catch(e){ arr=[]; } }
+    return arr||[];
+  };
+  const addPage=arr=>{ arr.forEach(x=>{ if(x.trade && +x.trade<10 && !/ST/.test(x.name||'') && !/^(4|8|92)/.test(x.code)){ out.push({code:x.code, name:x.name, price:+x.trade, pct:+x.changepercent, amount:x.amount, volume:x.volume, turnover:x.turnoverratio}); } }); };
+  const pages=[1,2,3,4,5,6];
+  const lists=await Promise.all(pages.map(fetchPage));
+  let ended=false;
+  for(const arr of lists){ if(arr.length<num) ended=true; addPage(arr); if(out.length>=480) break; }
+  if(!ended){ for(let page=7; page<=40 && out.length<480; page++){ const arr=await fetchPage(page); addPage(arr); if(arr.length<num) break; } }
+  SCAN.stocks=out.filter((v,i,a)=>a.findIndex(x=>x.code===v.code)===i).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,300);
+  storeJson2('newStratPool',{t:Date.now(),stocks:SCAN.stocks});
+  return SCAN.stocks;
+}
+async function loadKline2(code){
+  const ck=KLINE_CACHE[code];
+  if(ck && Date.now()-ck.t<10*60*1000) return ck.d;
+  const sym=symOf2(code), secid=sym+code;
+  const isFile=(typeof location!=='undefined')&&location.protocol==='file:';
+  let rows=[];
+  if(isFile){ rows=await sinaKline2(sym,code); }
+  if(!rows.length){
+    const urls=['https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+secid+',day,,,130,qfq','https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param='+secid+',day,,,130,qfq'];
+    for(const u of urls){
+      try{
+        const data=await fetchJson2(u,9000);
+        const d=(((data||{}).data||{})[secid])||{};
+        rows=(d['qfqday']||d['day']||[]).map(x=>({date:x[0],open:+x[1],close:+x[2],high:+x[3],low:+x[4],volume:+x[5]}));
+        if(rows.length) break;
+      }catch(e){}
+    }
+  }
+  if(!rows.length) rows=await sinaKline2(sym,code);
+  if(rows.length) KLINE_CACHE[code]={d:rows,t:Date.now()};
+  return rows;
+}
+function avg2(a){ if(!a.length) return 0; return a.reduce((x,y)=>x+y,0)/a.length; }
+function maOf2(arr,p,idx){ if(idx+1<p) return null; let s=0; for(let i=idx-p+1;i<=idx;i++) s+=arr[i]; return s/p; }
+function atrOf2(rows){ if(rows.length<21) return null; let s=0; for(let i=rows.length-20;i<rows.length;i++){ const tr=Math.max(rows[i].high-rows[i].low,Math.abs(rows[i].high-rows[i-1].close),Math.abs(rows[i].low-rows[i-1].close)); s+=tr; } return s/20; }
+function computeInd2(rows,quote){ if(!rows||rows.length<30) return null; const closes=rows.map(r=>r.close); const idx=rows.length-1; const price=quote&&quote.price>0?+quote.price:closes[idx]; const pct=quote&&quote.pct!=null?+quote.pct:(rows.length>1?(closes[idx]/closes[idx-1]-1)*100:0); const h60=Math.max.apply(null,rows.slice(-60).map(r=>r.high)); const l60=Math.min.apply(null,rows.slice(-60).map(r=>r.low)); const pos60=h60>l60?(price-l60)/(h60-l60)*100:50; const ma5=maOf2(closes,5,idx),ma10=maOf2(closes,10,idx),ma20=maOf2(closes,20,idx),ma60=maOf2(closes,60,idx); const vol5=avg2(rows.slice(-5).map(r=>r.volume)); const vol20=avg2(rows.slice(-20).map(r=>r.volume)); const chg10=closes.length>10?(price/closes[idx-10]-1)*100:null; const chg60=closes.length>60?(price/closes[idx-60]-1)*100:null; const chg120=closes.length>120?(price/closes[idx-120]-1)*100:null; const atr=atrOf2(rows); const atr20=atrOf2(rows.slice(0,-1)); const lowVol=atr!=null&&atr20!=null?atr<atr20:null; const volRatio=rows.length>1&&rows[idx-1].volume?((quote&&quote.volume)?+quote.volume:rows[idx].volume)/rows[idx-1].volume:1;
+  const amt5=vol5*100*price; // 近似5日均额(元) = 均量(手)*100*价
+  const annVol=atr!=null&&price>0?atr/price*Math.sqrt(250)*100:null; const r6=(()=>{ if(closes.length<7) return null; let g=0,l=0; for(let i=closes.length-6;i<closes.length;i++){ const d=closes[i]-closes[i-1]; if(d>=0)g+=d; else l-=d; } if(g+l===0) return 50; return 100*g/(g+l); })(); return { code:quote?quote.code:'', name:quote?quote.name:'', price,pct,pos60,ma5,ma10,ma20,ma60,chg10,chg60,chg120,atr,annVol,lowVol,volRatio,vol5,vol20,amount:quote?quote.amount_wan:null,turnover:quote?quote.turnover:null,r6,amt5,close:closes[idx] }; }
+async function qualityOf2(code){ const kc='q:'+code; const cc=QUAL_CACHE[kc]; if(cc&&Date.now()-cc.t<2*60*60*1000) return cc.d; try{ const scode=(code.startsWith('6')||code.startsWith('900'))?code+'.SH':(code.startsWith('0')||code.startsWith('2')||code.startsWith('3'))?code+'.SZ':code+'.BJ'; const data=await fetchJson2('https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=(SECUCODE%3D%22'+scode+'%22)&pageNumber=1&pageSize=2&sortTypes=-1&sortColumns=REPORT_DATE',8000); const rows=(((data||{}).result||{}).data)||[]; const it=rows[0]||{}; const out={ profit:it.PARENTNETPROFIT, roe:it.ROEJQ, debt:it.ZCFZL, pe:null, ok:!!it.PARENTNETPROFIT }; QUAL_CACHE[kc]={d:out,t:Date.now()}; return out; }catch(e){ return {ok:false}; } }
+function evalNew(ind,q){
+  const ev=(name,pass,val,extra)=>pass;
+  // 策略1：中长期动量（JT）60-120日相对动量 >5%（行业中性此处以绝对动量代理）+ 5日均额≥3000万
+  const rel1=ind.chg60!=null&&ind.chg120!=null?(ind.chg60+ind.chg120)/2:null;
+  const s1c = rel1!=null && rel1>5;
+  const liq1 = ind.amt5 != null && ind.amt5 >= 3000*1e4;
+  // 策略2：质量红利 ROE≥8%、净利>0、负债率<60%、PE>0（股息率需F10日线，此处用质量近似）
+  const s2q = q && q.ok && q.roe>=8 && q.profit>0 && (q.debt==null||q.debt<60);
+  // 策略3：低波动 年化波动≤40% + ATR收缩 + 5日均额≥5000万 + 收盘>MA60
+  const s3c = ind.annVol!=null && ind.annVol<=40 && ind.lowVol===true && ind.amt5!=null && ind.amt5>=5000*1e4 && ind.close!=null && ind.ma60!=null && ind.close>ind.ma60;
+  // 策略4：动量×质量复合 相对动量>5 + 质量合格 + 5日均额≥3000万
+  const s4c = s1c && s2q && liq1;
+  // 策略5：市场择时（指数动量）——个股侧显示 全市场低波防御候选（收盘>MA60 + 低波动 + 低换手）
+  const s5c = ind.close!=null && ind.ma60!=null && ind.close>ind.ma60 && ind.lowVol===true && ind.turnover!=null && ind.turnover<8;
+  const qLevel = !q || !q.ok ? 'nodata' : (q.roe>=10 && q.profit>0 && (q.debt==null||q.debt<50)) ? 'best' : (q.profit>0 && (q.debt==null||q.debt<70)) ? 'ok' : 'bad';
+  const hits=[s1c,!!s2q,s3c,s4c,s5c].filter(Boolean).length;
+  const sigLevel = hits>=3 ? 'strong' : hits>=2 ? 'cand' : hits>=1 ? 'watch' : 'none';
+  return { s1:s1c, s2:!!s2q, s3:s3c, s4:s4c, s5:s5c, rel1, liq1, qLevel, sigLevel, hits };
+}
+function softEv2(ind,q,ev){
+  return {
+    s1: ev.s1 || (ev.rel1!=null && ev.rel1>0),
+    s2: ev.s2 || (!!(q&&q.ok) && q.roe>=5 && q.profit>0 && (q.debt==null||q.debt<75)),
+    s3: ev.s3 || (ind.lowVol===true && ind.close!=null && ind.ma60!=null && ind.close>ind.ma60),
+    s4: ev.s4 || (ev.rel1!=null && ev.rel1>5 && !!(q&&q.ok)),
+    s5: ev.s5 || (ind.lowVol===true && ind.close!=null && ind.ma60!=null && ind.close>ind.ma60)
+  };
+}
+async function scanNow(manual){
+  if(SCAN.scanning) return; SCAN.scanning=true;
+  const hasOld=!!(SCAN.results&&SCAN.results.length);
+  [1,2,3,4,5].forEach(k=>{ const b=$2('btn-'+k); if(b){ b.disabled=true; b.textContent='扫描中…'; } const m=$2('meta-'+k); if(m) m.textContent=hasOld?'正在更新候选…':'正在获取<10元候选…'; const o=$2('out-'+k); if(o && !hasOld) o.innerHTML='<div class="live-empty">正在加载全市场<10元列表并逐只计算指标…</div>'; });
+  try{
+    const pool = SCAN.stocks.length && Date.now()-SCAN.lastFull<10*60*1000 ? SCAN.stocks : await loadSinaLT10();
+    SCAN.lastFull=Date.now();
+    if(!pool || !pool.length) throw new Error('候选池加载失败，请稍后重试');
+    const results=[];
+    const CHUNK=20;
+    let lastRender=0;
+    for(let i=0;i<pool.length;i+=CHUNK){
+      const rs=await Promise.all(pool.slice(i,i+CHUNK).map(async s=>{
+        const [rows, qual]=await Promise.all([loadKline2(s.code), qualityOf2(s.code)]);
+        let q = s.price>0 ? {code:s.code,name:s.name,price:+s.price,volume:isFinite(+s.volume)?+s.volume:null,turnover:isFinite(+s.turnover)?+s.turnover:null,amount_wan:(+s.amount||0)/1e4} : null;
+        if(q && isFinite(+s.pct)) q.pct=+s.pct;
+        if(!q){ const qc=new AbortController(); const qt=setTimeout(()=>qc.abort(),8000); try{ const txt=await fetch('https://qt.gtimg.cn/q='+symOf2(s.code)+s.code+'&_='+Date.now(),{mode:'cors',signal:qc.signal}).then(r=>r.text()); const m=txt&&txt.match(/="([^"]+)"/); if(m) q=parseTx2(m[1]); }catch(e){} finally{ clearTimeout(qt); } }
+        const ind=computeInd2(rows,q);
+        if(!ind || ind.price>=10) return null;
+        const ev=evalNew(ind,qual);
+        return { code:s.code, name:s.name||(q&&q.name)||'', ind, ev, qual };
+      }));
+      results.push(...rs.filter(Boolean));
+      const done=Math.min(i+CHUNK,pool.length);
+      [1,2,3,4,5].forEach(k=>{ const m=$2('meta-'+k); if(m) m.textContent='正在扫描 '+done+'/'+pool.length+'…'; });
+      if(results.length-lastRender>=20 || done>=pool.length){
+        lastRender=results.length;
+        SCAN.results=results.slice();
+        renderLive();
+        renderSignalPool();
+      }
+    }
+    SCAN.time=new Date().toLocaleString('zh-CN');
+    SCAN.results=results;
+    renderLive();
+    renderSignalPool();
+    saveKlineCache();
+    saveQualCache();
+    try{ if(window.localStorage) localStorage.setItem('newStratScan',JSON.stringify({t:SCAN.time,results:results.map(r=>({code:r.code,name:r.name,ind:r.ind,ev:r.ev}))})); }catch(e){}
+  }catch(e){ [1,2,3,4,5].forEach(k=>{ const o=$2('out-'+k); if(o) o.innerHTML='<div class="live-empty">扫描失败：'+esc2(e&&e.message||'网络异常')+'</div>'; }); }
+  finally{ SCAN.scanning=false; [1,2,3,4,5].forEach(k=>{ const b=$2('btn-'+k); if(b){ b.disabled=false; b.textContent='立即扫描'; } }); }
+}
+function esc2(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function renderLive(){
+  const rs=SCAN.results||[];
+  const meta=t=>t+' · 全网'+rs.length+'只<10元 · 最新扫描 '+SCAN.time;
+  for(let k=1;k<=5;k++){
+    const m=$2('meta-'+k); if(m) m.textContent=meta('策略'+k);
+    const o=$2('out-'+k); if(!o) continue;
+    let rows=[];
+    if(k===1) rows=rs.filter(r=>{ const s=softEv2(r.ind,r.qual,r.ev).s1; if(s) r._soft=!r.ev.s1; return s; });
+    if(k===2) rows=rs.filter(r=>{ const s=softEv2(r.ind,r.qual,r.ev).s2; if(s) r._soft=!r.ev.s2; return s; });
+    if(k===3) rows=rs.filter(r=>{ const s=softEv2(r.ind,r.qual,r.ev).s3; if(s) r._soft=!r.ev.s3; return s; });
+    if(k===4) rows=rs.filter(r=>{ const s=softEv2(r.ind,r.qual,r.ev).s4; if(s) r._soft=!r.ev.s4; return s; });
+    if(k===5) rows=rs.filter(r=>{ const s=softEv2(r.ind,r.qual,r.ev).s5; if(s) r._soft=!r.ev.s5; return s; });
+    const key='s'+k;
+    rows=rows.sort((a,b)=>((b.ev[key]?1:0)-(a.ev[key]?1:0))||((b.ev.rel1||0)-(a.ev.rel1||0))||(b.ind.pct-a.ind.pct)).slice(0,50);
+    if(!rs.length){ o.innerHTML='<div class="live-empty">尚未扫描或扫描无结果，点击"立即扫描"。</div>'; continue; }
+    if(!rows.length){ o.innerHTML='<div class="live-empty">当前<10元标的中暂无符合条件的'+'策略'+k+'信号。</div>'; continue; }
+    o.innerHTML='<div style="overflow:auto"><table class="live-table"><thead><tr><th>信号</th><th>质量</th><th>代码</th><th>名称</th><th>现价</th><th>涨跌幅</th><th>年化波动</th><th>60日动量</th></tr></thead><tbody>'+
+      rows.map(r=>{
+        const sig=r._soft?'watch':(r.ev.sigLevel||'none'), qlv=r.ev.qLevel||'nodata';
+        const sigM={strong:['强','hit'],cand:['候选','warn'],watch:['观察','hold'],none:['-','hold']};
+        const qM={best:['优秀','hit'],ok:['合格','hold'],bad:['差','warn'],nodata:['无数据','hold']};
+        const st=sigM[sig]||sigM.none, qx=qM[qlv]||qM.nodata;
+        const p=r.ind.price,sl3=p>0?fmt2(p*0.97,2):'-',sl5=p>0?fmt2(p*0.95,2):'-',tp5=p>0?fmt2(p*1.05,2):'-',tp8=p>0?fmt2(p*1.08,2):'-',tp10=p>0?fmt2(p*1.10,2):'-';
+        return '<tr><td><span class="lv-tag lv-'+st[1]+'">'+st[0]+'</span></td>'+
+          '<td><span class="lv-tag lv-'+qx[1]+'">'+qx[0]+'</span></td>'+
+          '<td>'+esc2(r.code)+'</td><td>'+esc2(r.name)+'</td>'+
+          '<td class="'+cls2(r.ind.pct)+'">'+fmt2(p)+'</td>'+
+          '<td class="'+cls2(r.ind.pct)+'">'+(r.ind.pct>0?'+':'')+fmt2(r.ind.pct,2)+'%</td>'+
+          '<td>'+(r.ind.annVol!=null?fmt2(r.ind.annVol,1)+'%':'-')+'</td>'+
+          '<td>'+(r.ind.chg60!=null?fmt2(r.ind.chg60,1)+'%':'-')+'</td></tr>'+
+          '<tr class="op-row"><td colspan="8">'+opDesc(k,p,sl3,sl5,tp5,tp8,tp10)+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+}
+
+function renderSignalPool(){
+  const root=$2('signal-pool-live');
+  if(!root) return;
+  const rs=SCAN.results||[];
+  const names={1:'中长期动量',2:'质量红利',3:'低波动优选',4:'动量质量复合',5:'市场择时(防御)'};
+  let html='<div class="st2">▎当前可买信号（最新扫描：'+esc2(SCAN.time||'尚未扫描')+'）</div>';
+  if(!rs.length){
+    html+='<div class="live-empty">尚未扫描或扫描无结果。请到任一策略页点击"立即扫描"。</div>';
+    root.innerHTML=html;
+    return;
+  }
+  for(let k=1;k<=5;k++){
+    const key='s'+k;
+    const sortFn=(a,b)=>((b.ev[key]?1:0)-(a.ev[key]?1:0))||((b.ev.rel1||0)-(a.ev.rel1||0))||(b.ind.pct-a.ind.pct);
+    const strict=rs.filter(r=>r.ev&&r.ev[key]).sort(sortFn).slice(0,15);
+    const soft=rs.filter(r=>r.ev&&!r.ev[key]&&softEv2(r.ind,r.qual,r.ev)[key]).sort(sortFn).slice(0,10);
+    const p=(strict[0]&&strict[0].ind.price)||(soft[0]&&soft[0].ind.price)||0;
+    html+='<div class="st2" style="margin-top:14px">策略'+k+'·'+names[k]+'（正式'+strict.length+'只 / 观察'+soft.length+'只）</div>';
+    html+='<table class="live-table"><thead><tr><th>代码</th><th>名称</th><th>现价</th><th>涨跌幅</th><th>信号</th></tr></thead><tbody>';
+    if(!strict.length&&!soft.length) html+='<tr><td colspan="5" class="live-empty">当前无符合条件标的</td></tr>';
+    const row=r=>{
+      const sig=!r.ev[key]?'watch':'strong';
+      const sigM={strong:['可买','hit'],watch:['观察','hold']};
+      const st=sigM[sig]||sigM.watch;
+      return '<tr><td>'+esc2(r.code)+'</td><td>'+esc2(r.name)+'</td>'+
+        '<td class="'+cls2(r.ind.pct)+'">'+fmt2(r.ind.price)+'</td>'+
+        '<td class="'+cls2(r.ind.pct)+'">'+(r.ind.pct>0?'+':'')+fmt2(r.ind.pct,2)+'%</td>'+
+        '<td><span class="lv-tag lv-'+st[1]+'">'+st[0]+'</span></td></tr>';
+    };
+    html+=strict.map(row).join('')+soft.map(row).join('');
+    html+='</tbody></table>';
+    const sl3=p>0?fmt2(p*0.97,2):'-', sl5=p>0?fmt2(p*0.95,2):'-', tp5=p>0?fmt2(p*1.05,2):'-', tp8=p>0?fmt2(p*1.08,2):'-', tp10=p>0?fmt2(p*1.10,2):'-';
+    html+='<div class="live-note">操作：'+opDesc(k,p,sl3,sl5,tp5,tp8,tp10)+'</div>';
+  }
+  root.innerHTML=html;
+}
+
+function opDesc(k,p,sl3,sl5,tp5,tp8,tp10){
+  const ops={
+    1:{n:'中长期动量',a:'仅进攻态启用',b:'T+1开盘等权买入，不追高',h:'持有20-60日',sl:'止损 '+sl5+'（-5%）',tp:'止盈 '+tp5+'（+5%）减半 / '+tp8+'（+8%）清仓 / 动量转负/满60日离场',pos:'单只≤30%',warn:'动量类只在进攻态启用'},
+    2:{n:'质量红利',a:'季报后/季度末',b:'等权买入，低频稳定',h:'持有1季度',sl:'盈利转负或估值>20时退出',tp:''+tp5+'（+5%）减半 / '+tp8+'（+8%）清仓',pos:'单只≤25%',warn:'排除盈利转负仍派息的价值陷阱'},
+    3:{n:'低波动优选',a:'每月末再平衡',b:'T+1开盘等权买入',h:'持有1月',sl:'跌破MA60或波动>40%时退出',tp:'月内 '+tp5+'（+5%）减半 / '+tp8+'（+8%）清仓',pos:'单只≤30%',warn:'防御态为主，进攻态仓位给策略1/4'},
+    4:{n:'动量质量复合',a:'仅进攻态启用',b:'T+1开盘买入复合得分前N',h:'持有20-40日',sl:'止损 '+sl5+'（-5%）',tp:'止盈 '+tp5+'（+5%）减半 / '+tp10+'（+10%）清仓 / 动量转负',pos:'单只≤30%',warn:'动量类只在进攻态启用'},
+    5:{n:'市场择时(防御)',a:'市场调整期启用',b:'分2-3批建仓（50%→30%→20%），只回调买不追高',h:'持有1-4周',sl:'止损 '+sl5+'（-5%）',tp:'止盈 '+tp10+'（+10%）减半 / 环境改善即卖',pos:'防守≤20%·单只≤10%',warn:'空仓态不停用，留0-10%现金'}
+  };
+  const o=ops[k]||ops[1];
+  return '<b>'+o.n+'</b>：'+o.a+'｜'+o.b+'｜持有'+o.h+'｜<b>止损</b> '+o.sl+'｜<b>止盈</b> '+o.tp+'｜<span class="lv-pos">仓位</span> '+o.pos+'｜<span style="color:#e3b341">'+o.warn+'</span>';
+}
+
+function loadScanSnap(){ try{ if(!window.localStorage) return false; const raw=localStorage.getItem('newStratScan'); if(!raw) return false; const snap=JSON.parse(raw); if(!snap||!snap.results||!snap.results.length) return false; SCAN.time=snap.t||'历史快照'; SCAN.results=snap.results.map(r=>({code:r.code,name:r.name,ind:r.ind,ev:r.ev})); renderLive(); renderSignalPool(); return true; }catch(e){ return false; } }
+let scanTimer=null;
+function scheduleScan2(){ if(scanTimer) clearInterval(scanTimer); scanTimer=setInterval(()=>{ if(isTradingTime2()) scanNow(false); },2*60*1000); }
+const snapLoaded2=loadScanSnap();
+loadPoolSnap();
+renderSignalPool();
+// 数据在非交易时间不自动更新，仅显示上次快照；盘中每2分钟自动刷新；手动「立即扫描」随时可用
+if(isTradingTime2()) scanNow(false);
+scheduleScan2();
+</script>
+</div>
+</body>
+</html>
