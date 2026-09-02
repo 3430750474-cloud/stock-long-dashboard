@@ -315,7 +315,7 @@ async function loadKlines(codes){
         }catch(e){}
       }
     }
-    await Promise.all([batchWorker(),batchWorker(),batchWorker(),batchWorker()]);
+    await Promise.all([batchWorker(),batchWorker(),batchWorker(),batchWorker(),batchWorker(),batchWorker()]);
     return out;
   }
   const out={};
@@ -380,7 +380,7 @@ async function loadPool(mode){
     if(seen.has(s.code)) return false;
     seen.add(s.code);
     return true;
-  }).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,180);
+  }).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,150);
 }
 
 async function loadQuality(code){
@@ -451,7 +451,7 @@ async function loadQualities(codes){
         }catch(e){}
       }
     }
-    await Promise.all([batchWorker(),batchWorker(),batchWorker(),batchWorker()]);
+    await Promise.all([batchWorker(),batchWorker(),batchWorker(),batchWorker(),batchWorker(),batchWorker()]);
     return out;
   }
   const out={};
