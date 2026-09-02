@@ -380,7 +380,7 @@ async function loadPool(mode){
     if(seen.has(s.code)) return false;
     seen.add(s.code);
     return true;
-  }).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,150);
+  }).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,120);
 }
 
 async function loadQuality(code){
@@ -1082,6 +1082,7 @@ function saveSnapshot(){
   try{
     localStorage.setItem('longScanV2', JSON.stringify({
       t:state.scanTime,
+      ts:state.lastScan,
       priceRange:state.priceRange,
       results:state.results.map(r=>({ code:r.code, name:r.name, ind:r.ind, qual:r.qual, qi:r.qi, evs:r.evs, best:r.best }))
     }));
@@ -1096,6 +1097,7 @@ function loadSnapshot(){
     if(!snap.results||!snap.results.length) return false;
     state.results=snap.results;
     state.scanTime=snap.t||'历史快照';
+    state.lastScan=snap.ts||0;
     if(snap.priceRange) state.priceRange=snap.priceRange;
     syncPriceSeg();
     renderAll();
@@ -1294,9 +1296,11 @@ function init(){
   loadSnapshot();
   loadMarket().then(()=>{
     renderAll();
-    if(!state.scanning) scanNow(false);
+    const fresh = state.lastScan && Date.now()-state.lastScan < 3*60*1000;
+    if(!fresh && !state.scanning) scanNow(false);
   }).catch(()=>{
-    if(!state.scanning) scanNow(false);
+    const fresh = state.lastScan && Date.now()-state.lastScan < 3*60*1000;
+    if(!fresh && !state.scanning) scanNow(false);
   });
   setInterval(refreshQuotes,20000);
   setInterval(()=>{

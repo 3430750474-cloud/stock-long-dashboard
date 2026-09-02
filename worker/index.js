@@ -148,12 +148,12 @@ async function fetchPool(mode){
   if(cached) return cached;
   let res;
   if(mode==='lt100'){
-    const fast = await fetchEastmoneyPool(100, 150);
-    res = fast.length ? fast : await fetchSinaPool(100, 150);
+    const fast = await fetchEastmoneyPool(100, 120);
+    res = fast.length ? fast : await fetchSinaPool(100, 120);
   }else if(mode==='lt10'){
-    res = await fetchSinaPool(10, 150);
+    res = await fetchSinaPool(10, 120);
   }else{
-    res = await fetchSinaPool(Infinity, 150);
+    res = await fetchSinaPool(Infinity, 120);
   }
   cacheSet(key, res);
   return res;
