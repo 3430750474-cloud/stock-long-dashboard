@@ -83,7 +83,7 @@ const state = {
 };
 const STATIC_HOST = (typeof location!=='undefined') && (/\.github\.io$/.test(location.hostname) || location.protocol==='file:');
 const USE_SERVER = (typeof location!=='undefined') && (location.protocol==='http:'||location.protocol==='https:') && !STATIC_HOST;
-const API_BASE = (typeof window!=='undefined' && window.__API_BASE) || '';
+let API_BASE = (typeof window!=='undefined' && window.__API_BASE) || '';
 
 function localGet(key, ttl){
   try{
@@ -98,6 +98,19 @@ function localSet(key, v){
   try{
     localStorage.setItem(key, JSON.stringify({ t:Date.now(), v }));
   }catch(e){}
+}
+
+async function probeApiBase(){
+  if(!API_BASE) return;
+  try{
+    const c=new AbortController();
+    const t=setTimeout(()=>c.abort(), 4000);
+    const r=await fetch(API_BASE+'/api/pool?mode=lt100', { mode:'cors', signal:c.signal });
+    clearTimeout(t);
+    if(!r.ok) API_BASE='';
+  }catch(e){
+    API_BASE='';
+  }
 }
 
 const $ = id => document.getElementById(id);
@@ -348,7 +361,7 @@ async function loadKlines(codes){
     return out;
   }
   const out={};
-  const CH=6;
+  const CH=4;
   for(let i=0;i<uniq.length;i+=CH){
     await Promise.all(uniq.slice(i,i+CH).map(async c=>{
       try{ out[c]=await loadKline(c); }catch(e){}
@@ -415,7 +428,7 @@ async function loadPool(mode){
     if(seen.has(s.code)) return false;
     seen.add(s.code);
     return true;
-  }).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,120);
+  }).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,80);
 }
 
 async function loadQuality(code){
@@ -502,7 +515,7 @@ async function loadQualities(codes){
     return out;
   }
   const out={};
-  const CH=6;
+  const CH=4;
   for(let i=0;i<uniq.length;i+=CH){
     await Promise.all(uniq.slice(i,i+CH).map(async c=>{
       out[c]=await loadQuality(c);
@@ -1127,7 +1140,7 @@ function renderAll(){
 
 function saveSnapshot(){
   try{
-    localStorage.setItem('longScanV2', JSON.stringify({
+    localStorage.setItem('longScanV3', JSON.stringify({
       t:state.scanTime,
       ts:state.lastScan,
       priceRange:state.priceRange,
@@ -1138,10 +1151,12 @@ function saveSnapshot(){
 
 function loadSnapshot(){
   try{
-    const raw=localStorage.getItem('longScanV2');
+    const raw=localStorage.getItem('longScanV3');
     if(!raw) return false;
     const snap=JSON.parse(raw);
     if(!snap.results||!snap.results.length) return false;
+    const first=snap.results[0];
+    if(!first||!first.evs||!first.evs['1']||!first.evs['2']||!first.evs['3']||!first.evs['4']||!first.evs['5']) return false;
     state.results=snap.results;
     state.scanTime=snap.t||'历史快照';
     state.lastScan=snap.ts||0;
@@ -1334,13 +1349,14 @@ function bindEvents(){
   });
 }
 
-function init(){
+async function init(){
   bindEvents();
   renderStrategyTabs();
   renderStrategyPanel(state.activeStrat);
   renderMarketState();
   updateMeta();
   loadSnapshot();
+  await probeApiBase();
   loadMarket().then(()=>{
     renderAll();
     const fresh = state.lastScan && Date.now()-state.lastScan < 3*60*1000;
