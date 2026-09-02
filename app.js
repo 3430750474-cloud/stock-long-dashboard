@@ -58,8 +58,9 @@ const STRATS = {
 };
 
 const LEVEL_TEXT = { strong:'强', medium:'中', weak:'弱', none:'无' };
+const IS_PUBLIC_PAGES = (typeof location!=='undefined') && location.hostname.indexOf('github.io')>=0;
 const state = {
-  poolMode:'lt10',
+  poolMode: IS_PUBLIC_PAGES ? 'lt100' : 'lt10',
   results:[],
   scanning:false,
   lastScan:0,
@@ -71,7 +72,7 @@ const state = {
   searchSeq:0
 };
 const USE_SERVER = (typeof location!=='undefined') && (location.protocol==='http:'||location.protocol==='https:');
-const API_BASE = (typeof window!=='undefined' && (window.__API_BASE || (location.hostname.indexOf('github.io')>=0 ? 'https://stock-dashboard-api.3430750474.workers.dev' : ''))) || '';
+const API_BASE = (typeof window!=='undefined' && (window.__API_BASE || (IS_PUBLIC_PAGES ? 'https://stock-dashboard-api.3430750474.workers.dev' : ''))) || '';
 
 const $ = id => document.getElementById(id);
 const fmt = (n,d) => { if(n==null||isNaN(+n)) return '-'; return (+n).toFixed(d==null?2:d); };
@@ -171,6 +172,23 @@ async function fetchJson(url, cb, timeout){
   }
 }
 
+async function fetchBatchMap(path, codes){
+  const out={};
+  const chunkSize = API_BASE ? 18 : 120;
+  const chunks=[];
+  for(let i=0;i<codes.length;i+=chunkSize) chunks.push(codes.slice(i,i+chunkSize));
+  await Promise.all(chunks.map(async part=>{
+    try{
+      const r=await fetch(API_BASE+path+'?codes='+encodeURIComponent(part.join(',')), { mode:'cors' });
+      if(r.ok){
+        const d=await r.json();
+        if(d) Object.assign(out,d);
+      }
+    }catch(e){}
+  }));
+  return out;
+}
+
 async function loadQuotes(syms){
   const uniq=[...new Set(syms)];
   if(USE_SERVER){
@@ -268,11 +286,8 @@ async function loadKlines(codes){
   const uniq=[...new Set(codes.filter(c=>/^\d{6}$/.test(c)))];
   if(USE_SERVER && uniq.length){
     try{
-      const r=await fetch(API_BASE+'/api/klineBatch?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' });
-      if(r.ok){
-        const d=await r.json();
-        if(d) return d;
-      }
+      const d=await fetchBatchMap('/api/klineBatch', uniq);
+      if(Object.keys(d).length) return d;
     }catch(e){}
   }
   const out={};
@@ -358,11 +373,8 @@ async function loadQualities(codes){
   if(!uniq.length) return {};
   if(USE_SERVER){
     try{
-      const r=await fetch(API_BASE+'/api/qualityBatch?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' });
-      if(r.ok){
-        const d=await r.json();
-        if(d) return d;
-      }
+      const d=await fetchBatchMap('/api/qualityBatch', uniq);
+      if(Object.keys(d).length) return d;
     }catch(e){}
   }
   const out={};
