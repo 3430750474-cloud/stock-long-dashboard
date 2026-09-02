@@ -7,3 +7,4 @@ backup_20260901_新策略.html
 *.png
 __*
 cloudflared.exe
+**/.wrangler/
