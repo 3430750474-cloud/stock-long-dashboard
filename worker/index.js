@@ -4,6 +4,21 @@ const CORS = {
   'Access-Control-Allow-Headers':'Content-Type'
 };
 
+const cache = new Map();
+function cacheGet(key, ttl){
+  const c = cache.get(key);
+  if(c && Date.now()-c.t < ttl) return c.v;
+  return null;
+}
+function cacheSet(key, v){
+  cache.set(key, { t:Date.now(), v });
+  if(cache.size > 4000){
+    for(const [k,c] of cache){
+      if(Date.now()-c.t > 15*60*1000) cache.delete(k);
+    }
+  }
+}
+
 function json(data, status){
   status = status || 200;
   return new Response(JSON.stringify(data), {
@@ -128,17 +143,27 @@ async function fetchSinaPool(maxPrice, limit){
 }
 
 async function fetchPool(mode){
+  const key = 'pool:'+mode;
+  const cached = cacheGet(key, 5*60*1000);
+  if(cached) return cached;
+  let res;
   if(mode==='lt100'){
     const fast = await fetchEastmoneyPool(100, 220);
-    if(fast.length) return fast;
-    return fetchSinaPool(100, 180);
+    res = fast.length ? fast : await fetchSinaPool(100, 180);
+  }else if(mode==='lt10'){
+    res = await fetchSinaPool(10, 180);
+  }else{
+    res = await fetchSinaPool(Infinity, 180);
   }
-  if(mode==='lt10') return fetchSinaPool(10, 180);
-  return fetchSinaPool(Infinity, 180);
+  cacheSet(key, res);
+  return res;
 }
 
 async function fetchQuotes(syms){
   if(!syms.length) return {};
+  const key = 'quote:'+[...new Set(syms)].sort().join(',');
+  const cached = cacheGet(key, 10*1000);
+  if(cached) return cached;
   const url = 'https://qt.gtimg.cn/q='+syms.join(',')+'&_='+Date.now();
   const out = {};
   try{
@@ -153,30 +178,38 @@ async function fetchQuotes(syms){
       }
     }
   }catch(e){}
+  cacheSet(key, out);
   return out;
 }
 
 async function fetchKline(code){
+  const key = 'kline:'+code;
+  const cached = cacheGet(key, 2*60*1000);
+  if(cached) return cached;
   const sym = symOf(code);
   try{
-    const url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=160';
+    const url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=120';
     const r = await get(url, {}, 10000);
     if(r.status===200){
       const arr = JSON.parse(new TextDecoder().decode(r.body));
       if(Array.isArray(arr) && arr.length){
-        return arr.map(x=>({ date:x.day, open:+x.open, close:+x.close, high:+x.high, low:+x.low, volume:+x.volume/100 }));
+        const rows = arr.map(x=>({ date:x.day, open:+x.open, close:+x.close, high:+x.high, low:+x.low, volume:+x.volume/100 }));
+        cacheSet(key, rows);
+        return rows;
       }
     }
   }catch(e){}
   try{
-    const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+code+',day,,,160,qfq';
+    const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+code+',day,,,120,qfq';
     const r = await get(url, { Referer:'https://gu.qq.com/' }, 10000);
     if(r.status===200){
       const data = JSON.parse(new TextDecoder().decode(r.body));
       const d = (((data||{}).data||{})[sym+code])||{};
       const raw = d['qfqday'] || d['day'] || [];
       if(raw.length){
-        return raw.map(x=>({ date:x[0], open:+x[1], close:+x[2], high:+x[3], low:+x[4], volume:+x[5] }));
+        const rows = raw.map(x=>({ date:x[0], open:+x[1], close:+x[2], high:+x[3], low:+x[4], volume:+x[5] }));
+        cacheSet(key, rows);
+        return rows;
       }
     }
   }catch(e){}
@@ -184,6 +217,9 @@ async function fetchKline(code){
 }
 
 async function fetchQuality(code){
+  const key = 'quality:'+code;
+  const cached = cacheGet(key, 2*60*60*1000);
+  if(cached) return cached;
   const scode = code.startsWith('6') ? code+'.SH' : code+'.SZ';
   const url = 'https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=(SECUCODE%3D%22'+scode+'%22)&pageNumber=1&pageSize=2&sortTypes=-1&sortColumns=REPORT_DATE';
   try{
@@ -192,13 +228,19 @@ async function fetchQuality(code){
       const data = JSON.parse(new TextDecoder().decode(r.body));
       const rows = (((data||{}).result||{}).data)||[];
       const it = rows[0]||{};
-      return { ok:!!it.PARENTNETPROFIT, profit:it.PARENTNETPROFIT, roe:it.ROEJQ, debt:it.ZCFZL, profitGrowth:it.PARENTNETPROFITTZ, revGrowth:it.TOTALOPERATEREVETZ };
+      const out = { ok:!!it.PARENTNETPROFIT, profit:it.PARENTNETPROFIT, roe:it.ROEJQ, debt:it.ZCFZL, profitGrowth:it.PARENTNETPROFITTZ, revGrowth:it.TOTALOPERATEREVETZ };
+      cacheSet(key, out);
+      return out;
     }
   }catch(e){}
+  cacheSet(key, { ok:false });
   return { ok:false };
 }
 
 async function fetchSearch(q){
+  const key = 'search:'+q.toLowerCase();
+  const cached = cacheGet(key, 60*1000);
+  if(cached) return cached;
   const url = 'https://searchapi.eastmoney.com/api/suggest/get?input='+encodeURIComponent(q)+'&type=14&token=D43BF722C8E33BDC906FB84D85E326E8&count=10';
   const out = [];
   try{
@@ -218,7 +260,9 @@ async function fetchSearch(q){
     }
   }catch(e){}
   if(!out.length && /^\d{6}$/.test(q)) out.push({ code:q, name:'', market:symOf(q) });
-  return out.slice(0, 8);
+  const res = out.slice(0, 8);
+  cacheSet(key, res);
+  return res;
 }
 
 export default {
@@ -243,9 +287,9 @@ export default {
         return json(await fetchKline(code));
       }
       if(p==='/api/klineBatch'){
-        const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,20);
+        const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,25);
         const out = {};
-        await runConcurrent(codes, 6, async code=>{ out[code] = await fetchKline(code); });
+        await runConcurrent(codes, 12, async code=>{ out[code] = await fetchKline(code); });
         return json(out);
       }
       if(p==='/api/quality'){
@@ -254,9 +298,9 @@ export default {
         return json(await fetchQuality(code));
       }
       if(p==='/api/qualityBatch'){
-        const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,20);
+        const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,25);
         const out = {};
-        await runConcurrent(codes, 6, async code=>{ out[code] = await fetchQuality(code); });
+        await runConcurrent(codes, 12, async code=>{ out[code] = await fetchQuality(code); });
         return json(out);
       }
       if(p==='/api/search'){
