@@ -8,3 +8,4 @@ backup_20260901_新策略.html
 __*
 cloudflared.exe
 **/.wrangler/
+.netlify/
