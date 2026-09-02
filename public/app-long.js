@@ -85,6 +85,21 @@ const STATIC_HOST = (typeof location!=='undefined') && (/\.github\.io$/.test(loc
 const USE_SERVER = (typeof location!=='undefined') && (location.protocol==='http:'||location.protocol==='https:') && !STATIC_HOST;
 const API_BASE = (typeof window!=='undefined' && window.__API_BASE) || '';
 
+function localGet(key, ttl){
+  try{
+    const raw=localStorage.getItem(key);
+    if(!raw) return null;
+    const d=JSON.parse(raw);
+    if(d && Date.now()-d.t < ttl) return d.v;
+  }catch(e){}
+  return null;
+}
+function localSet(key, v){
+  try{
+    localStorage.setItem(key, JSON.stringify({ t:Date.now(), v }));
+  }catch(e){}
+}
+
 const $ = id => document.getElementById(id);
 const fmt = (n,d) => { if(n==null||isNaN(+n)) return '-'; return (+n).toFixed(d==null?2:d); };
 const cls = p => p>0?'up':(p<0?'down':'flat');
@@ -236,11 +251,16 @@ async function loadKline(code){
     }catch(e){}
   }
   if(API_BASE && !USE_SERVER){
+    const lc=localGet('lk:'+code, 10*60*1000);
+    if(lc) return lc;
     try{
       const r=await fetch(API_BASE+'/api/kline?code='+code, { mode:'cors' });
       if(r.ok){
         const arr=await r.json();
-        if(Array.isArray(arr)) return arr;
+        if(Array.isArray(arr)){
+          localSet('lk:'+code, arr);
+          return arr;
+        }
       }
     }catch(e){}
   }
@@ -306,11 +326,20 @@ async function loadKlines(codes){
     async function batchWorker(){
       while(batchIdx<chunks.length){
         const chunk=chunks[batchIdx++];
+        const missing=chunk.filter(c=>{
+          const v=localGet('lk:'+c, 10*60*1000);
+          if(v){ out[c]=v; return false; }
+          return true;
+        });
+        if(!missing.length) continue;
         try{
-          const r=await fetch(API_BASE+'/api/klineBatch?codes='+encodeURIComponent(chunk.join(',')), { mode:'cors' });
+          const r=await fetch(API_BASE+'/api/klineBatch?codes='+encodeURIComponent(missing.join(',')), { mode:'cors' });
           if(r.ok){
             const d=await r.json();
-            if(d) Object.assign(out,d);
+            if(d){
+              Object.assign(out,d);
+              missing.forEach(c=>{ if(d[c]) localSet('lk:'+c, d[c]); });
+            }
           }
         }catch(e){}
       }
@@ -339,11 +368,17 @@ async function loadPool(mode){
     }catch(e){}
   }
   if(API_BASE && !USE_SERVER){
+    const lkey='lpool:'+mode;
+    const lc=localGet(lkey, 5*60*1000);
+    if(lc) return lc;
     try{
       const r=await fetch(API_BASE+'/api/pool?mode='+mode, { mode:'cors' });
       if(r.ok){
         const arr=await r.json();
-        if(Array.isArray(arr)&&arr.length) return arr;
+        if(Array.isArray(arr)&&arr.length){
+          localSet(lkey, arr);
+          return arr;
+        }
       }
     }catch(e){}
   }
@@ -398,11 +433,14 @@ async function loadQuality(code){
     }catch(e){}
   }
   if(API_BASE && !USE_SERVER){
+    const lc=localGet('lq:'+code, 2*60*60*1000);
+    if(lc) return lc;
     try{
       const r=await fetch(API_BASE+'/api/quality?code='+code, { mode:'cors' });
       if(r.ok){
         const d=await r.json();
         state.qualCache.set(code,{d,t:now});
+        localSet('lq:'+code, d);
         return d;
       }
     }catch(e){}
@@ -442,11 +480,20 @@ async function loadQualities(codes){
     async function batchWorker(){
       while(batchIdx<chunks.length){
         const chunk=chunks[batchIdx++];
+        const missing=chunk.filter(c=>{
+          const v=localGet('lq:'+c, 2*60*60*1000);
+          if(v){ out[c]=v; return false; }
+          return true;
+        });
+        if(!missing.length) continue;
         try{
-          const r=await fetch(API_BASE+'/api/qualityBatch?codes='+encodeURIComponent(chunk.join(',')), { mode:'cors' });
+          const r=await fetch(API_BASE+'/api/qualityBatch?codes='+encodeURIComponent(missing.join(',')), { mode:'cors' });
           if(r.ok){
             const d=await r.json();
-            if(d) Object.assign(out,d);
+            if(d){
+              Object.assign(out,d);
+              missing.forEach(c=>{ if(d[c]) localSet('lq:'+c, d[c]); });
+            }
           }
         }catch(e){}
       }
