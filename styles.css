@@ -542,8 +542,9 @@ input{font-family:inherit}
 @media (max-width:560px){
   .brand h1{font-size:18px}
   .top-actions{width:100%}
-  .search-box{flex:1}
-  .search-box input{flex:1;width:auto}
+  .search-box{flex:1 1 auto;min-width:0}
+  .search-box input{flex:1 1 0;min-width:0;width:auto}
+  .search-box button,.top-actions>button{flex:0 0 auto}
   .strategy-cards{grid-template-columns:1fr 1fr}
   .status-wrap{align-items:flex-start}
   .idx-card{flex:1 1 110px;min-width:110px}
