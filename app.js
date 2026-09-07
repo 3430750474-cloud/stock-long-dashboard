@@ -84,7 +84,7 @@ const API_CANDIDATES = (()=>{
   [NETLIFY_API, WORKER_API].forEach(u=>{ if(list.indexOf(u)<0) list.push(u); });
   return list;
 })();
-const CHUNK_SIZE = API_CANDIDATES.some(u=>u.indexOf('netlify')>=0) ? 60 : 120;
+const CHUNK_SIZE = 120;
 
 async function fetchCors(url, timeout){
   timeout = timeout || 9000;
@@ -213,7 +213,7 @@ async function fetchBatchMap(path, codes){
   const chunks=[];
   for(let i=0;i<codes.length;i+=CHUNK_SIZE) chunks.push(codes.slice(i,i+CHUNK_SIZE));
   await Promise.all(chunks.map(async part=>{
-    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 45000);
+    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 60000);
     if(got && got.res.ok){
       try{
         const d=await got.res.json();
