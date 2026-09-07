@@ -144,7 +144,7 @@ async function fetchSinaPool(maxPrice, limit){
   rows.forEach(arr=>{
     if(!Array.isArray(arr)) return;
     arr.forEach(x=>{
-      const price = +x.trade;
+      const price = +x.trade || +x.settlement;
       if(!x.code || !price || /ST|退/.test(x.name||'')) return;
       if(price > maxPrice) return;
       out.push({ code:x.code, name:x.name, price, amount:x.amount||0 });

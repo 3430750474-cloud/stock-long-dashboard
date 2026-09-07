@@ -73,6 +73,41 @@ const state = {
 };
 const USE_SERVER = (typeof location!=='undefined') && (location.protocol==='http:'||location.protocol==='https:');
 const API_BASE = (typeof window!=='undefined' && (window.__API_BASE || (IS_PUBLIC_PAGES ? 'https://stock-dashboard-api.3430750474.workers.dev' : ''))) || '';
+const NETLIFY_API = 'https://stockboard-api-2026.netlify.app/.netlify/functions';
+const WORKER_API = 'https://stock-dashboard-api.3430750474.workers.dev';
+const EXPLICIT_API = (typeof window!=='undefined' && window.__API_BASE) || '';
+const API_CANDIDATES = (()=>{
+  const list = [];
+  if(!IS_PUBLIC_PAGES && !EXPLICIT_API) list.push('');
+  if(EXPLICIT_API) list.push(EXPLICIT_API);
+  [NETLIFY_API, WORKER_API].forEach(u=>{ if(list.indexOf(u)<0) list.push(u); });
+  return list;
+})();
+const CHUNK_SIZE = API_CANDIDATES.some(u=>u.indexOf('netlify')>=0) ? 10 : 120;
+
+async function fetchCors(url, timeout){
+  timeout = timeout || 9000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), timeout);
+  try{
+    const r = await fetch(url, { mode:'cors', signal:ctrl.signal });
+    if(!r.ok) throw new Error('status '+r.status);
+    return r;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+async function apiFetch(path, timeout){
+  timeout = timeout || 9000;
+  for(const base of API_CANDIDATES){
+    try{
+      const res = await fetchCors(base + path, timeout);
+      return { res, base };
+    }catch(e){}
+  }
+  return null;
+}
 
 const $ = id => document.getElementById(id);
 const fmt = (n,d) => { if(n==null||isNaN(+n)) return '-'; return (+n).toFixed(d==null?2:d); };
@@ -162,7 +197,7 @@ function jsonp(url, cbName, timeout){
 
 async function fetchJson(url, cb, timeout){
   try{
-    const r=await fetch(url,{mode:'cors'});
+    const r=await fetchCors(url, timeout||9000);
     if(!r.ok) throw new Error('status '+r.status);
     return await r.json();
   }catch(e){
@@ -174,17 +209,16 @@ async function fetchJson(url, cb, timeout){
 
 async function fetchBatchMap(path, codes){
   const out={};
-  const chunkSize = API_BASE ? 18 : 120;
   const chunks=[];
-  for(let i=0;i<codes.length;i+=chunkSize) chunks.push(codes.slice(i,i+chunkSize));
+  for(let i=0;i<codes.length;i+=CHUNK_SIZE) chunks.push(codes.slice(i,i+CHUNK_SIZE));
   await Promise.all(chunks.map(async part=>{
-    try{
-      const r=await fetch(API_BASE+path+'?codes='+encodeURIComponent(part.join(',')), { mode:'cors' });
-      if(r.ok){
-        const d=await r.json();
+    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 9000);
+    if(got && got.res.ok){
+      try{
+        const d=await got.res.json();
         if(d) Object.assign(out,d);
-      }
-    }catch(e){}
+      }catch(e){}
+    }
   }));
   return out;
 }
@@ -192,18 +226,16 @@ async function fetchBatchMap(path, codes){
 async function loadQuotes(syms){
   const uniq=[...new Set(syms)];
   if(USE_SERVER){
-    try{
-      const r=await fetch(API_BASE+'/api/quote?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' });
-      if(r.ok){
-        const d=await r.json();
-        if(d) return d;
-      }
-    }catch(e){}
+    const got=await apiFetch('/api/quote?codes='+encodeURIComponent(uniq.join(',')), 8000);
+    if(got && got.res.ok){
+      const d=await got.res.json();
+      if(d && Object.keys(d).length) return d;
+    }
   }
   const url='https://qt.gtimg.cn/q='+uniq.join(',')+'&_='+Date.now();
   const out={};
   try{
-    const r=await fetch(url,{mode:'cors'});
+    const r=await fetchCors(url, 8000);
     let text;
     try{
       const buf=await r.arrayBuffer();
@@ -242,13 +274,11 @@ async function loadKline(code){
   const sym=symOf(code);
   const rows=[];
   if(USE_SERVER){
-    try{
-      const r=await fetch(API_BASE+'/api/kline?code='+code, { mode:'cors' });
-      if(r.ok){
-        const arr=await r.json();
-        if(Array.isArray(arr)) return arr;
-      }
-    }catch(e){}
+    const got=await apiFetch('/api/kline?code='+code, 8000);
+    if(got && got.res.ok){
+      const arr=await got.res.json();
+      if(Array.isArray(arr)) return arr;
+    }
   }
   try{
     const secid = (code.startsWith('399')||code.startsWith('999')) ? '0.'+code : (sym==='sh'?'1.':'0.')+code;
@@ -302,13 +332,14 @@ async function loadKlines(codes){
 
 async function loadPool(mode){
   if(USE_SERVER){
-    try{
-      const r=await fetch(API_BASE+'/api/pool?mode='+mode, { mode:'cors' });
-      if(r.ok){
-        const arr=await r.json();
-        if(Array.isArray(arr)) return arr;
+    const got=await apiFetch('/api/pool?mode='+mode, 8000);
+    if(got && got.res.ok){
+      let arr=await got.res.json();
+      if(Array.isArray(arr) && arr.length){
+        if(mode==='lt10') arr = arr.filter(s=>+s.price<=10);
+        if(arr.length) return arr;
       }
-    }catch(e){}
+    }
   }
   const out=[];
   const num=80;
@@ -345,14 +376,12 @@ async function loadQuality(code){
   const cached=state.qualCache.get(code);
   if(cached && now-cached.t<2*60*60*1000) return cached.d;
   if(USE_SERVER){
-    try{
-      const r=await fetch(API_BASE+'/api/quality?code='+code, { mode:'cors' });
-      if(r.ok){
-        const d=await r.json();
-        state.qualCache.set(code,{d,t:now});
-        return d;
-      }
-    }catch(e){}
+    const got=await apiFetch('/api/quality?code='+code, 8000);
+    if(got && got.res.ok){
+      const d=await got.res.json();
+      state.qualCache.set(code,{d,t:now});
+      return d;
+    }
   }
   const scode = code.startsWith('6') ? code+'.SH' : code+'.SZ';
   const url='https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=(SECUCODE%3D%22'+scode+'%22)&pageNumber=1&pageSize=2&sortTypes=-1&sortColumns=REPORT_DATE';

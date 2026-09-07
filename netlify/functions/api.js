@@ -89,6 +89,7 @@ async function fetchPool(mode){
   const cached = cacheGet(key, 5*60*1000);
   if(cached) return cached;
   const out = [];
+  const maxPrice = mode==='lt10' ? 10 : (mode==='lt100' ? 100 : Infinity);
   const pages = [1,2,3,4,5,6,7,8];
   const rows = await runConcurrent(pages, 4, async page=>{
     const url = 'https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+page+'&num=80&sort=amount&asc=0&node=hs_a&symbol=&_s_r_a=page';
@@ -101,9 +102,9 @@ async function fetchPool(mode){
   rows.forEach(arr=>{
     if(!Array.isArray(arr)) return;
     arr.forEach(x=>{
-      const price = +x.trade;
+      const price = +x.trade || +x.settlement;
       if(!x.code || !price || /ST|退/.test(x.name||'')) return;
-      if(price > 100) return;
+      if(price > maxPrice) return;
       out.push({ code:x.code, name:x.name, price, amount:x.amount||0 });
     });
   });
