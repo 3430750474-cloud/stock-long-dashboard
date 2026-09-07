@@ -59,8 +59,9 @@ const STRATS = {
 
 const LEVEL_TEXT = { strong:'强', medium:'中', weak:'弱', none:'无' };
 const IS_PUBLIC_PAGES = (typeof location!=='undefined') && location.hostname.indexOf('github.io')>=0;
+const URL_POOL = (typeof location!=='undefined' && location.search.indexOf('pool=lt100')>=0) ? 'lt100' : null;
 const state = {
-  poolMode: IS_PUBLIC_PAGES ? 'lt100' : 'lt10',
+  poolMode: URL_POOL || (IS_PUBLIC_PAGES ? 'lt100' : 'lt10'),
   results:[],
   scanning:false,
   lastScan:0,
@@ -78,12 +79,12 @@ const WORKER_API = 'https://stock-dashboard-api.3430750474.workers.dev';
 const EXPLICIT_API = (typeof window!=='undefined' && window.__API_BASE) || '';
 const API_CANDIDATES = (()=>{
   const list = [];
+  if(EXPLICIT_API) return [EXPLICIT_API];
   if(!IS_PUBLIC_PAGES && !EXPLICIT_API) list.push('');
-  if(EXPLICIT_API) list.push(EXPLICIT_API);
   [NETLIFY_API, WORKER_API].forEach(u=>{ if(list.indexOf(u)<0) list.push(u); });
   return list;
 })();
-const CHUNK_SIZE = API_CANDIDATES.some(u=>u.indexOf('netlify')>=0) ? 10 : 120;
+const CHUNK_SIZE = API_CANDIDATES.some(u=>u.indexOf('netlify')>=0) ? 60 : 120;
 
 async function fetchCors(url, timeout){
   timeout = timeout || 9000;
@@ -212,7 +213,7 @@ async function fetchBatchMap(path, codes){
   const chunks=[];
   for(let i=0;i<codes.length;i+=CHUNK_SIZE) chunks.push(codes.slice(i,i+CHUNK_SIZE));
   await Promise.all(chunks.map(async part=>{
-    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 9000);
+    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 45000);
     if(got && got.res.ok){
       try{
         const d=await got.res.json();
@@ -226,7 +227,7 @@ async function fetchBatchMap(path, codes){
 async function loadQuotes(syms){
   const uniq=[...new Set(syms)];
   if(USE_SERVER){
-    const got=await apiFetch('/api/quote?codes='+encodeURIComponent(uniq.join(',')), 8000);
+    const got=await apiFetch('/api/quote?codes='+encodeURIComponent(uniq.join(',')), 12000);
     if(got && got.res.ok){
       const d=await got.res.json();
       if(d && Object.keys(d).length) return d;
@@ -274,7 +275,7 @@ async function loadKline(code){
   const sym=symOf(code);
   const rows=[];
   if(USE_SERVER){
-    const got=await apiFetch('/api/kline?code='+code, 8000);
+    const got=await apiFetch('/api/kline?code='+code, 15000);
     if(got && got.res.ok){
       const arr=await got.res.json();
       if(Array.isArray(arr)) return arr;
@@ -317,7 +318,11 @@ async function loadKlines(codes){
   if(USE_SERVER && uniq.length){
     try{
       const d=await fetchBatchMap('/api/klineBatch', uniq);
-      if(Object.keys(d).length) return d;
+      if(Object.keys(d).length){
+        const missing=uniq.filter(c=>!(d[c]&&d[c].length));
+        if(missing.length) Object.assign(d, await fetchBatchMap('/api/klineBatch', missing));
+        return d;
+      }
     }catch(e){}
   }
   const out={};
@@ -332,7 +337,7 @@ async function loadKlines(codes){
 
 async function loadPool(mode){
   if(USE_SERVER){
-    const got=await apiFetch('/api/pool?mode='+mode, 8000);
+    const got=await apiFetch('/api/pool?mode='+mode, 12000);
     if(got && got.res.ok){
       let arr=await got.res.json();
       if(Array.isArray(arr) && arr.length){
@@ -376,7 +381,7 @@ async function loadQuality(code){
   const cached=state.qualCache.get(code);
   if(cached && now-cached.t<2*60*60*1000) return cached.d;
   if(USE_SERVER){
-    const got=await apiFetch('/api/quality?code='+code, 8000);
+    const got=await apiFetch('/api/quality?code='+code, 12000);
     if(got && got.res.ok){
       const d=await got.res.json();
       state.qualCache.set(code,{d,t:now});

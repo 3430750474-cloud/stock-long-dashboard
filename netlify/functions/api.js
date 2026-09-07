@@ -245,9 +245,9 @@ exports.handler = async (event) => {
       return respond(await fetchKline(code));
     }
     if(p==='/api/klineBatch'){
-      const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,12);
+      const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,120);
       const out = {};
-      await runConcurrent(codes, 5, async code=>{ out[code] = await fetchKline(code); });
+      await runConcurrent(codes, 12, async code=>{ out[code] = await fetchKline(code); });
       return respond(out);
     }
     if(p==='/api/quality'){
@@ -256,9 +256,9 @@ exports.handler = async (event) => {
       return respond(await fetchQuality(code));
     }
     if(p==='/api/qualityBatch'){
-      const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,12);
+      const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,120);
       const out = {};
-      await runConcurrent(codes, 5, async code=>{ out[code] = await fetchQuality(code); });
+      await runConcurrent(codes, 12, async code=>{ out[code] = await fetchQuality(code); });
       return respond(out);
     }
     if(p==='/api/search'){
