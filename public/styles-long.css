@@ -633,6 +633,7 @@ button{cursor:pointer}
 @media (max-width:560px){
   .brand h1{font-size:18px}
   .top-actions{width:100%}
+  .control-row{flex-direction:column;align-items:stretch}
   .search-wrap{flex:1;min-width:0}
   .search-box{width:100%}
   .search-box input{flex:1;width:auto}
@@ -641,7 +642,8 @@ button{cursor:pointer}
   .idx-card{flex:1 1 110px;min-width:110px}
   .seg-group{width:100%;overflow-x:auto}
   .seg-group button{flex:1}
-  .range-box{flex:1;min-width:0}
+  .range-box{width:100%;flex:none;min-width:0}
   .range-box input{flex:1;width:auto}
+  .progress-wrap{width:100%;max-width:none;min-width:0}
   .drawer{width:100vw}
 }
