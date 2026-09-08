@@ -74,6 +74,7 @@ const state = {
   priceMax:100,
   results:[],
   scanning:false,
+  scanAbort:false,
   lastScan:0,
   scanTime:'',
   market:{ state:'unknown', aboveMa60:null, mom120:null, dailyVol:null },
@@ -184,7 +185,7 @@ function jsonp(url, cbName, timeout){
 
 async function fetchJson(url, cb, timeout){
   try{
-    const r=await fetch(url,{mode:'cors'});
+    const r=await fetchT(url,{mode:'cors'},12000);
     if(!r.ok) throw new Error('status '+r.status);
     return await r.json();
   }catch(e){
@@ -194,11 +195,22 @@ async function fetchJson(url, cb, timeout){
   }
 }
 
+async function fetchT(url, options, timeout){
+  timeout = timeout || 20000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), timeout);
+  try{
+    return await fetch(url, Object.assign({}, options||{}, { signal:ctrl.signal }));
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
 async function loadQuotes(syms){
   const uniq=[...new Set(syms)];
   if(USE_SERVER){
     try{
-      const r=await fetch('/api/quote?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' });
+      const r=await fetchT('/api/quote?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' }, 20000);
       if(r.ok){
         const d=await r.json();
         if(d) return d;
@@ -207,7 +219,7 @@ async function loadQuotes(syms){
   }
   if(API_BASE && !USE_SERVER){
     try{
-      const r=await fetch(API_BASE+'/api/quote?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' });
+      const r=await fetchT(API_BASE+'/api/quote?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' }, 20000);
       if(r.ok){
         const d=await r.json();
         if(d) return d;
@@ -217,7 +229,7 @@ async function loadQuotes(syms){
   const url='https://qt.gtimg.cn/q='+uniq.join(',')+'&_='+Date.now();
   const out={};
   try{
-    const r=await fetch(url,{mode:'cors'});
+    const r=await fetchT(url,{mode:'cors'},15000);
     let text;
     try{
       const buf=await r.arrayBuffer();
@@ -257,7 +269,7 @@ async function loadKline(code){
   const rows=[];
   if(USE_SERVER){
     try{
-      const r=await fetch('/api/kline?code='+code, { mode:'cors' });
+      const r=await fetchT('/api/kline?code='+code, { mode:'cors' }, 20000);
       if(r.ok){
         const arr=await r.json();
         if(Array.isArray(arr)) return arr;
@@ -268,7 +280,7 @@ async function loadKline(code){
     const lc=localGet('lk:'+code, 10*60*1000);
     if(lc) return lc;
     try{
-      const r=await fetch(API_BASE+'/api/kline?code='+code, { mode:'cors' });
+      const r=await fetchT(API_BASE+'/api/kline?code='+code, { mode:'cors' }, 20000);
       if(r.ok){
         const arr=await r.json();
         if(Array.isArray(arr)){
@@ -324,7 +336,7 @@ async function loadKlines(codes){
   const uniq=[...new Set(codes.filter(c=>/^\d{6}$/.test(c)))];
   if(USE_SERVER && uniq.length){
     try{
-      const r=await fetch('/api/klineBatch?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' });
+      const r=await fetchT('/api/klineBatch?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' }, 20000);
       if(r.ok){
         const d=await r.json();
         if(d) return d;
@@ -347,7 +359,7 @@ async function loadKlines(codes){
         });
         if(!missing.length) continue;
         try{
-          const r=await fetch(API_BASE+'/api/klineBatch?codes='+encodeURIComponent(missing.join(',')), { mode:'cors' });
+          const r=await fetchT(API_BASE+'/api/klineBatch?codes='+encodeURIComponent(missing.join(',')), { mode:'cors' }, 20000);
           if(r.ok){
             const d=await r.json();
             if(d){
@@ -374,7 +386,7 @@ async function loadKlines(codes){
 async function loadPool(mode){
   if(USE_SERVER){
     try{
-      const r=await fetch('/api/pool?mode='+mode, { mode:'cors' });
+      const r=await fetchT('/api/pool?mode='+mode, { mode:'cors' }, 20000);
       if(r.ok){
         const arr=await r.json();
         if(Array.isArray(arr)&&arr.length) return arr;
@@ -386,7 +398,7 @@ async function loadPool(mode){
     const lc=localGet(lkey, 5*60*1000);
     if(lc) return lc;
     try{
-      const r=await fetch(API_BASE+'/api/pool?mode='+mode, { mode:'cors' });
+      const r=await fetchT(API_BASE+'/api/pool?mode='+mode, { mode:'cors' }, 20000);
       if(r.ok){
         const arr=await r.json();
         if(Array.isArray(arr)&&arr.length){
@@ -438,7 +450,7 @@ async function loadQuality(code){
   if(cached && now-cached.t<2*60*60*1000) return cached.d;
   if(USE_SERVER){
     try{
-      const r=await fetch('/api/quality?code='+code, { mode:'cors' });
+      const r=await fetchT('/api/quality?code='+code, { mode:'cors' }, 20000);
       if(r.ok){
         const d=await r.json();
         state.qualCache.set(code,{d,t:now});
@@ -450,7 +462,7 @@ async function loadQuality(code){
     const lc=localGet('lq:'+code, 2*60*60*1000);
     if(lc) return lc;
     try{
-      const r=await fetch(API_BASE+'/api/quality?code='+code, { mode:'cors' });
+      const r=await fetchT(API_BASE+'/api/quality?code='+code, { mode:'cors' }, 20000);
       if(r.ok){
         const d=await r.json();
         state.qualCache.set(code,{d,t:now});
@@ -478,7 +490,7 @@ async function loadQualities(codes){
   if(!uniq.length) return {};
   if(USE_SERVER){
     try{
-      const r=await fetch('/api/qualityBatch?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' });
+      const r=await fetchT('/api/qualityBatch?codes='+encodeURIComponent(uniq.join(',')), { mode:'cors' }, 20000);
       if(r.ok){
         const d=await r.json();
         if(d) return d;
@@ -501,7 +513,7 @@ async function loadQualities(codes){
         });
         if(!missing.length) continue;
         try{
-          const r=await fetch(API_BASE+'/api/qualityBatch?codes='+encodeURIComponent(missing.join(',')), { mode:'cors' });
+          const r=await fetchT(API_BASE+'/api/qualityBatch?codes='+encodeURIComponent(missing.join(',')), { mode:'cors' }, 20000);
           if(r.ok){
             const d=await r.json();
             if(d){
@@ -1083,52 +1095,75 @@ function updateProgress(done,total){
   $('progressText').textContent='扫描 '+Math.min(done,total)+'/'+total;
 }
 
+async function scanWork(){
+  const pool=await loadPool('lt100');
+  if(state.scanAbort) throw new Error('已取消');
+  if(!pool.length) throw new Error('候选池为空，请检查网络');
+  $('progressText').textContent='候选池 '+pool.length+' 只，批量获取行情…';
+  const codes=pool.map(s=>s.code);
+  const [quoteMap,klineMap]=await Promise.all([
+    loadQuotes(pool.map(s=>symOf(s.code)+s.code)),
+    loadKlines(codes)
+  ]);
+  if(state.scanAbort) throw new Error('已取消');
+  const pre=[];
+  pool.forEach(s=>{
+    const rows=klineMap[s.code]||[];
+    const q=quoteMap[symOf(s.code)+s.code] || null;
+    const ind=computeInd(rows,q,s.code);
+    if(ind) pre.push({ code:s.code, name:s.name||(q&&q.name)||'', ind });
+  });
+  $('progressText').textContent='指标计算 '+pre.length+'/'+pool.length+'，批量拉取财务…';
+  const qualityCodes=pre.filter(x=>needsQuality(x.ind)).map(x=>x.code);
+  const qualityMap=await loadQualities(qualityCodes);
+  if(state.scanAbort) throw new Error('已取消');
+  const results=[];
+  pre.forEach(x=>{
+    const qual=qualityMap[x.code] || { ok:false };
+    const qi=qualityInfo(qual,x.ind);
+    const ev=evalAll(x.ind,qual,state.market);
+    const evs=ev.evs;
+    const best=bestStrategy(evs,qi);
+    results.push({ code:x.code, name:x.name, ind:x.ind, qual, qi, evs, best });
+  });
+  state.results=results;
+  state.lastScan=Date.now();
+  state.scanTime=new Date().toLocaleString('zh-CN',{hour12:false});
+  saveSnapshot();
+  renderAll();
+  $('progressText').textContent='扫描完成 '+results.length+'/'+pool.length;
+}
+
 async function scanNow(manual){
   if(state.scanning) return;
   state.scanning=true;
+  state.scanAbort=false;
   setScanningUI(true);
-  try{
-    const pool=await loadPool('lt100');
-    if(!pool.length) throw new Error('候选池为空，请检查网络');
-    $('progressText').textContent='候选池 '+pool.length+' 只，批量获取行情…';
-    const codes=pool.map(s=>s.code);
-    const [quoteMap,klineMap]=await Promise.all([
-      loadQuotes(pool.map(s=>symOf(s.code)+s.code)),
-      loadKlines(codes)
-    ]);
-    const pre=[];
-    pool.forEach(s=>{
-      const rows=klineMap[s.code]||[];
-      const q=quoteMap[symOf(s.code)+s.code] || null;
-      const ind=computeInd(rows,q,s.code);
-      if(ind) pre.push({ code:s.code, name:s.name||(q&&q.name)||'', ind });
-    });
-    $('progressText').textContent='指标计算 '+pre.length+'/'+pool.length+'，批量拉取财务…';
-    const qualityCodes=pre.filter(x=>needsQuality(x.ind)).map(x=>x.code);
-    const qualityMap=await loadQualities(qualityCodes);
-    const results=[];
-    pre.forEach(x=>{
-      const qual=qualityMap[x.code] || { ok:false };
-      const qi=qualityInfo(qual,x.ind);
-      const ev=evalAll(x.ind,qual,state.market);
-      const evs=ev.evs;
-      const best=bestStrategy(evs,qi);
-      results.push({ code:x.code, name:x.name, ind:x.ind, qual, qi, evs, best });
-    });
-    state.results=results;
-    state.lastScan=Date.now();
-    state.scanTime=new Date().toLocaleString('zh-CN',{hour12:false});
-    saveSnapshot();
-    renderAll();
-    $('progressText').textContent='扫描完成 '+results.length+'/'+pool.length;
-  }catch(e){
-    $('signalMeta').textContent='扫描失败：'+e.message;
-    $('marketStatus').textContent='网络异常';
-    $('marketStatus').className='status error';
-  }finally{
+  let aborted=false;
+  const finish=e=>{
+    if(!state.scanning) return;
+    if(e && !aborted){
+      $('signalMeta').textContent='扫描失败：'+e.message;
+      $('marketStatus').textContent='网络异常';
+      $('marketStatus').className='status error';
+    }
     state.scanning=false;
     setScanningUI(false);
     updateMeta();
+  };
+  const timer=setTimeout(()=>{
+    state.scanAbort=true;
+    aborted=true;
+    finish(new Error('扫描超时，请检查网络后重试'));
+  }, 90000);
+  try{
+    await scanWork();
+    if(!aborted) finish();
+  }catch(e){
+    finish(aborted ? null : e);
+  }finally{
+    clearTimeout(timer);
+    if(state.scanning) finish();
   }
 }
 
@@ -1203,7 +1238,7 @@ async function fetchSuggestions(q){
   if(!q.trim()) return [];
   if(USE_SERVER){
     try{
-      const r=await fetch('/api/search?q='+encodeURIComponent(q.trim()), { mode:'cors' });
+      const r=await fetchT('/api/search?q='+encodeURIComponent(q.trim()), { mode:'cors' }, 15000);
       if(r.ok){
         const d=await r.json();
         if(Array.isArray(d)&&d.length) return d;
@@ -1212,7 +1247,7 @@ async function fetchSuggestions(q){
   }
   if(API_BASE && !USE_SERVER){
     try{
-      const r=await fetch(API_BASE+'/api/search?q='+encodeURIComponent(q.trim()), { mode:'cors' });
+      const r=await fetchT(API_BASE+'/api/search?q='+encodeURIComponent(q.trim()), { mode:'cors' }, 15000);
       if(r.ok){
         const d=await r.json();
         if(Array.isArray(d)&&d.length) return d;
