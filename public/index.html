@@ -44,11 +44,12 @@
 </section>
 
 <section class="control-row">
-  <div class="seg-group" id="priceSeg">
-    <button type="button" data-price="all" class="active">全部≤100元</button>
-    <button type="button" data-price="lt10">≤10元</button>
-    <button type="button" data-price="10to30">10-30元</button>
-    <button type="button" data-price="30to100">30-100元</button>
+  <div class="range-box">
+    <label for="minPrice">价格区间</label>
+    <input id="minPrice" type="number" min="0" max="100" step="0.01" placeholder="最低价">
+    <span class="range-sep">至</span>
+    <input id="maxPrice" type="number" min="0" max="100" step="0.01" placeholder="最高价">
+    <button id="rangeBtn" type="button">筛选</button>
   </div>
   <div class="progress-wrap">
     <div class="progress-track"><div class="progress-fill" id="progressBar"></div></div>

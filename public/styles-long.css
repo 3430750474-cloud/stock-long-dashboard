@@ -188,6 +188,44 @@ button{cursor:pointer}
   white-space:nowrap;
 }
 .seg-group button.active{background:var(--teal);color:#04211d}
+.range-box{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:5px 6px;
+}
+.range-box label{
+  font-size:12px;
+  font-weight:800;
+  color:var(--muted);
+  white-space:nowrap;
+}
+.range-box input{
+  width:78px;
+  background:var(--panel2);
+  border:1px solid var(--line);
+  border-radius:6px;
+  color:var(--text);
+  padding:7px 8px;
+  font-size:13px;
+  min-width:0;
+}
+.range-box input:focus{outline:0;border-color:var(--teal)}
+.range-box .range-sep{color:var(--dim);font-size:12px}
+.range-box button{
+  background:var(--teal);
+  color:#04211d;
+  border:0;
+  border-radius:6px;
+  padding:7px 12px;
+  font-size:12px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.range-box button:hover{filter:brightness(1.1)}
 .progress-wrap{
   display:flex;
   align-items:center;
@@ -603,5 +641,7 @@ button{cursor:pointer}
   .idx-card{flex:1 1 110px;min-width:110px}
   .seg-group{width:100%;overflow-x:auto}
   .seg-group button{flex:1}
+  .range-box{flex:1;min-width:0}
+  .range-box input{flex:1;width:auto}
   .drawer{width:100vw}
 }

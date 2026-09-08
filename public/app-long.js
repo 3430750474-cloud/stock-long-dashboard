@@ -70,7 +70,8 @@ const STRATS = {
 const LEVEL_TEXT = { strong:'强', medium:'中', weak:'弱', none:'无' };
 const MARKET_LABEL = { attack:'进攻态', defense:'防御态', empty:'空仓态', unknown:'计算中' };
 const state = {
-  priceRange:'all',
+  priceMin:0,
+  priceMax:100,
   results:[],
   scanning:false,
   lastScan:0,
@@ -842,10 +843,9 @@ function renderMarketState(){
 
 function inPrice(r){
   const p=r.ind.price;
-  if(state.priceRange==='lt10') return p<=10;
-  if(state.priceRange==='10to30') return p>10&&p<=30;
-  if(state.priceRange==='30to100') return p>30&&p<=100;
-  return true;
+  const min=state.priceMin==null||isNaN(+state.priceMin)?0:+state.priceMin;
+  const max=state.priceMax==null||isNaN(+state.priceMax)?100:+state.priceMax;
+  return p>=min && p<=max;
 }
 
 function renderStrategyCards(){
@@ -889,7 +889,9 @@ function renderSignalPool(){
     rows.push({ r, active, op, score });
   });
   rows.sort((a,b)=>b.score-a.score);
-  const rangeText={all:'全部≤100元',lt10:'≤10元', '10to30':'10-30元', '30to100':'30-100元'}[state.priceRange];
+  const minT=state.priceMin==null||isNaN(+state.priceMin)?0:+state.priceMin;
+  const maxT=state.priceMax==null||isNaN(+state.priceMax)?100:+state.priceMax;
+  const rangeText=(minT===0&&maxT>=100)?'全部≤100元':minT+' - '+maxT+'元';
   const meta='候选池 '+state.results.length+' 只 · 价格 '+rangeText+' · 命中 '+rows.length+' 只 · 扫描 '+state.scanTime;
   $('signalMeta').textContent=meta;
   const body=$('signalBody');
@@ -1143,7 +1145,8 @@ function saveSnapshot(){
     localStorage.setItem('longScanV3', JSON.stringify({
       t:state.scanTime,
       ts:state.lastScan,
-      priceRange:state.priceRange,
+      priceMin:state.priceMin,
+      priceMax:state.priceMax,
       results:state.results.map(r=>({ code:r.code, name:r.name, ind:r.ind, qual:r.qual, qi:r.qi, evs:r.evs, best:r.best }))
     }));
   }catch(e){}
@@ -1160,8 +1163,9 @@ function loadSnapshot(){
     state.results=snap.results;
     state.scanTime=snap.t||'历史快照';
     state.lastScan=snap.ts||0;
-    if(snap.priceRange) state.priceRange=snap.priceRange;
-    syncPriceSeg();
+    if(snap.priceMin!=null) state.priceMin=snap.priceMin;
+    if(snap.priceMax!=null) state.priceMax=snap.priceMax;
+    syncPriceInput();
     renderAll();
     return true;
   }catch(e){ return false; }
@@ -1303,10 +1307,23 @@ async function handleSearch(){
   }
 }
 
-function syncPriceSeg(){
-  document.querySelectorAll('#priceSeg button').forEach(b=>{
-    b.classList.toggle('active', b.dataset.price===state.priceRange);
-  });
+function syncPriceInput(){
+  if($('minPrice')) $('minPrice').value=state.priceMin;
+  if($('maxPrice')) $('maxPrice').value=state.priceMax;
+}
+
+function applyPriceRange(){
+  const rawMin=parseFloat($('minPrice').value);
+  const rawMax=parseFloat($('maxPrice').value);
+  state.priceMin=isNaN(rawMin)||rawMin<0 ? 0 : rawMin;
+  state.priceMax=isNaN(rawMax)||rawMax<=0 ? 100 : rawMax;
+  if(state.priceMin>state.priceMax){
+    const t=state.priceMin;
+    state.priceMin=state.priceMax;
+    state.priceMax=t;
+  }
+  syncPriceInput();
+  renderAll();
 }
 
 function bindEvents(){
@@ -1327,13 +1344,11 @@ function bindEvents(){
     const el=e.target.closest('.suggest-item');
     if(el) loadStockBySearch({ code:el.dataset.code, market:el.dataset.market, name:el.dataset.name });
   });
-  document.querySelectorAll('#priceSeg button').forEach(b=>{
-    b.onclick=()=>{
-      state.priceRange=b.dataset.price;
-      syncPriceSeg();
-      renderAll();
-    };
-  });
+  if($('rangeBtn')){
+    $('rangeBtn').onclick=applyPriceRange;
+    $('minPrice').addEventListener('keydown',e=>{ if(e.key==='Enter') applyPriceRange(); });
+    $('maxPrice').addEventListener('keydown',e=>{ if(e.key==='Enter') applyPriceRange(); });
+  }
   $('drawerClose').onclick=()=>{
     $('drawer').hidden=true;
     $('drawerBackdrop').hidden=true;
@@ -1351,6 +1366,7 @@ function bindEvents(){
 
 async function init(){
   bindEvents();
+  syncPriceInput();
   renderStrategyTabs();
   renderStrategyPanel(state.activeStrat);
   renderMarketState();
