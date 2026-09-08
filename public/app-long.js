@@ -81,7 +81,7 @@ const state = {
   activeStrat:1,
   searchSeq:0
 };
-const STATIC_HOST = (typeof location!=='undefined') && (/\.github\.io$/.test(location.hostname) || location.protocol==='file:');
+const STATIC_HOST = (typeof location!=='undefined') && (/\.github\.io$/.test(location.hostname) || /\.netlify\.app$/.test(location.hostname) || location.protocol==='file:');
 const USE_SERVER = (typeof location!=='undefined') && (location.protocol==='http:'||location.protocol==='https:') && !STATIC_HOST;
 let API_BASE = (typeof window!=='undefined' && window.__API_BASE) || '';
 
@@ -104,7 +104,7 @@ async function probeApiBase(){
   if(!API_BASE) return;
   try{
     const c=new AbortController();
-    const t=setTimeout(()=>c.abort(), 4000);
+    const t=setTimeout(()=>c.abort(), 15000);
     const r=await fetch(API_BASE+'/api/pool?mode=lt100', { mode:'cors', signal:c.signal });
     clearTimeout(t);
     if(!r.ok) API_BASE='';
