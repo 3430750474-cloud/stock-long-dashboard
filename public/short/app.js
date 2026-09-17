@@ -84,7 +84,7 @@ const API_CANDIDATES = (()=>{
   [NETLIFY_API, WORKER_API].forEach(u=>{ if(list.indexOf(u)<0) list.push(u); });
   return list;
 })();
-const CHUNK_SIZE = 40;
+  const CHUNK_SIZE = 20;
 
 async function fetchCors(url, timeout){
   timeout = timeout || 9000;
@@ -213,7 +213,7 @@ async function fetchBatchMap(path, codes){
   const chunks=[];
   for(let i=0;i<codes.length;i+=CHUNK_SIZE) chunks.push(codes.slice(i,i+CHUNK_SIZE));
   await Promise.all(chunks.map(async part=>{
-    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 8000);
+    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 15000);
     if(got && got.res.ok){
       try{
         const d=await got.res.json();
@@ -347,7 +347,12 @@ async function loadKlines(codes){
   if(USE_SERVER && uniq.length){
     try{
       const d=await fetchBatchMap('/api/klineBatch', uniq);
-      const missing=uniq.filter(c=>!(d[c]&&d[c].length));
+      let missing=uniq.filter(c=>!(d[c]&&d[c].length));
+      if(missing.length){
+        const retry=await fetchBatchMap('/api/klineBatch', missing);
+        if(retry) Object.assign(d,retry);
+        missing=uniq.filter(c=>!(d[c]&&d[c].length));
+      }
       if(missing.length) await fillKlinesDirect(d, missing);
       return d;
     }catch(e){}
