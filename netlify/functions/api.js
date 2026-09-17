@@ -84,12 +84,44 @@ function parseTx(s){
   };
 }
 
-async function fetchPool(mode){
-  const key = 'pool:'+mode;
-  const cached = cacheGet(key, 5*60*1000);
-  if(cached) return cached;
+function dedupePool(out, limit){
+  const seen = new Set();
+  return out.filter(s=>{
+    if(seen.has(s.code)) return false;
+    seen.add(s.code);
+    return true;
+  }).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0, limit);
+}
+
+async function fetchEastmoneyPool(maxPrice, limit){
+  const pages = maxPrice <= 10 ? [1,2,3,4,5,6,7,8] : [1,2,3,4,5];
+  const rows = await runConcurrent(pages, 4, async pn=>{
+    const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn='+pn+'&pz=100&po=1&np=1&fltt=2&invt=2&fid=f6'+
+      '&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048'+
+      '&fields=f2,f3,f5,f6,f12,f14&ut=bd1d9ddb04089700cf9c27f6f7426281';
+    try{
+      const r = await get(url, { Referer:'https://quote.eastmoney.com/' }, 8000);
+      if(r.status!==200) return [];
+      const data = JSON.parse(new TextDecoder().decode(r.body));
+      return (((data||{}).data||{}).diff) || [];
+    }catch(e){ return []; }
+  });
   const out = [];
-  const maxPrice = mode==='lt10' ? 10 : (mode==='lt100' ? 100 : Infinity);
+  rows.forEach(arr=>{
+    if(!Array.isArray(arr)) return;
+    arr.forEach(x=>{
+      const code = String(x.f12||'');
+      const name = String(x.f14||'');
+      const price = +x.f2;
+      if(!/^\d{6}$/.test(code) || !price || /ST|退/.test(name)) return;
+      if(price > maxPrice) return;
+      out.push({ code, name, price, amount:+x.f6||0 });
+    });
+  });
+  return dedupePool(out, limit);
+}
+
+async function fetchSinaPool(maxPrice, limit){
   const pages = [1,2,3,4,5,6,7,8];
   const rows = await runConcurrent(pages, 4, async page=>{
     const url = 'https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+page+'&num=80&sort=amount&asc=0&node=hs_a&symbol=&_s_r_a=page';
@@ -99,6 +131,7 @@ async function fetchPool(mode){
       return JSON.parse(new TextDecoder().decode(r.body)) || [];
     }catch(e){ return []; }
   });
+  const out = [];
   rows.forEach(arr=>{
     if(!Array.isArray(arr)) return;
     arr.forEach(x=>{
@@ -108,12 +141,17 @@ async function fetchPool(mode){
       out.push({ code:x.code, name:x.name, price, amount:x.amount||0 });
     });
   });
-  const seen = new Set();
-  const res = out.filter(s=>{
-    if(seen.has(s.code)) return false;
-    seen.add(s.code);
-    return true;
-  }).sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0, 80);
+  return dedupePool(out, limit);
+}
+
+async function fetchPool(mode){
+  const key = 'pool:'+mode;
+  const cached = cacheGet(key, 5*60*1000);
+  if(cached) return cached;
+  const maxPrice = mode==='lt10' ? 10 : (mode==='lt100' ? 100 : Infinity);
+  const limit = 160;
+  let res = await fetchEastmoneyPool(maxPrice, limit);
+  if(res.length < 60) res = await fetchSinaPool(maxPrice, limit);
   cacheSet(key, res, 5*60*1000);
   return res;
 }
@@ -147,26 +185,26 @@ async function fetchKline(code){
   if(cached) return cached;
   const sym = symOf(code);
   try{
-    const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+code+',day,,,120,qfq';
-    const r = await get(url, { Referer:'https://gu.qq.com/' }, 10000);
+    const url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=120';
+    const r = await get(url, {}, 8000);
     if(r.status===200){
-      const data = JSON.parse(new TextDecoder().decode(r.body));
-      const d = (((data||{}).data||{})[sym+code])||{};
-      const raw = d['qfqday'] || d['day'] || [];
-      if(raw.length){
-        const rows = raw.map(x=>({ date:x[0], open:+x[1], close:+x[2], high:+x[3], low:+x[4], volume:+x[5] }));
+      const arr = JSON.parse(new TextDecoder().decode(r.body));
+      if(Array.isArray(arr) && arr.length){
+        const rows = arr.map(x=>({ date:x.day, open:+x.open, close:+x.close, high:+x.high, low:+x.low, volume:+x.volume/100 }));
         cacheSet(key, rows, 10*60*1000);
         return rows;
       }
     }
   }catch(e){}
   try{
-    const url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=120';
-    const r = await get(url, {}, 10000);
+    const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+code+',day,,,120,qfq';
+    const r = await get(url, { Referer:'https://gu.qq.com/' }, 8000);
     if(r.status===200){
-      const arr = JSON.parse(new TextDecoder().decode(r.body));
-      if(Array.isArray(arr) && arr.length){
-        const rows = arr.map(x=>({ date:x.day, open:+x.open, close:+x.close, high:+x.high, low:+x.low, volume:+x.volume/100 }));
+      const data = JSON.parse(new TextDecoder().decode(r.body));
+      const d = (((data||{}).data||{})[sym+code])||{};
+      const raw = d['qfqday'] || d['day'] || [];
+      if(raw.length){
+        const rows = raw.map(x=>({ date:x[0], open:+x[1], close:+x[2], high:+x[3], low:+x[4], volume:+x[5] }));
         cacheSet(key, rows, 10*60*1000);
         return rows;
       }
@@ -247,7 +285,7 @@ exports.handler = async (event) => {
     if(p==='/api/klineBatch'){
       const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,120);
       const out = {};
-      await runConcurrent(codes, 12, async code=>{ out[code] = await fetchKline(code); });
+      await runConcurrent(codes, 20, async code=>{ out[code] = await fetchKline(code); });
       return respond(out);
     }
     if(p==='/api/quality'){
@@ -258,7 +296,7 @@ exports.handler = async (event) => {
     if(p==='/api/qualityBatch'){
       const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,120);
       const out = {};
-      await runConcurrent(codes, 12, async code=>{ out[code] = await fetchQuality(code); });
+      await runConcurrent(codes, 20, async code=>{ out[code] = await fetchQuality(code); });
       return respond(out);
     }
     if(p==='/api/search'){
