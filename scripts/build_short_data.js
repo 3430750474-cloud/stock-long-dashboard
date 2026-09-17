@@ -115,15 +115,22 @@ async function main(){
   if(pool.length < 80) pool = await fetchSinaPool();
   if(pool.length < 80) throw new Error('候选池获取失败');
   const modes = buildModes(pool);
-  const codes = [...new Set([...modes.lt100,...modes.lt10,...modes.all].map(x=>x.code))].slice(0,LIMIT);
+  const codes = [...new Set([...modes.lt100,...modes.lt10,...modes.all].map(x=>x.code))].slice(0,320);
   console.log('pool', pool.length, 'codes', codes.length);
   console.log('fetch klines...');
   const rows = await runConcurrent(codes, 20, fetchKline);
   const klines = {};
   codes.forEach((code,i)=>{ if(rows[i] && rows[i].length) klines[code]=rows[i]; });
   console.log('klines', Object.keys(klines).length, '/', codes.length);
+  const valid = new Set(Object.entries(klines).filter(([,v])=>v.length>=30).map(([code])=>code));
+  const filteredModes = {
+    updated:modes.updated,
+    lt100:modes.lt100.filter(x=>valid.has(x.code)),
+    lt10:modes.lt10.filter(x=>valid.has(x.code)),
+    all:modes.all.filter(x=>valid.has(x.code))
+  };
   fs.mkdirSync(OUT_DIR, { recursive:true });
-  fs.writeFileSync(path.join(OUT_DIR,'pool.json'), JSON.stringify(modes));
+  fs.writeFileSync(path.join(OUT_DIR,'pool.json'), JSON.stringify(filteredModes));
   fs.writeFileSync(path.join(OUT_DIR,'klines.json'), JSON.stringify({ updated:new Date().toISOString(), rows:klines }));
   console.log('written', OUT_DIR);
 }
