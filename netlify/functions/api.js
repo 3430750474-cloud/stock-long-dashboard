@@ -409,27 +409,6 @@ exports.handler = async (event) => {
       if(!/^\d{6}$/.test(code)) return respond({ error:'bad code' }, 400);
       return respond(await fetchKline(code));
     }
-    if(p==='/api/klineDiag'){
-      const code = url.searchParams.get('code') || '600519';
-      const sym = symOf(code);
-      const tests = [
-        ['tencent','https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+code+',day,,,120,qfq'],
-        ['sina','https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=120'],
-        ['eastmoney','https://push2his.eastmoney.com/api/qt/stock/kline/get?secid='+(sym==='sh'?'1.':'0.')+code+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120']
-      ];
-      const out = [];
-      for(const [name,u] of tests){
-        const t = Date.now();
-        try{
-          const r = await get(u, {}, 6000);
-          const text = new TextDecoder().decode(r.body);
-          out.push({ name, status:r.status, ms:Date.now()-t, len:text.length, head:text.slice(0,80) });
-        }catch(e){
-          out.push({ name, ms:Date.now()-t, error:e.message });
-        }
-      }
-      return respond(out);
-    }
     if(p==='/api/klineBatch'){
       const codes = (url.searchParams.get('codes')||'').split(',').filter(c=>/^\d{6}$/.test(c)).slice(0,120);
       const out = {};

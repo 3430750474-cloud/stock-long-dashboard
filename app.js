@@ -84,7 +84,8 @@ const API_CANDIDATES = (()=>{
   [NETLIFY_API, WORKER_API].forEach(u=>{ if(list.indexOf(u)<0) list.push(u); });
   return list;
 })();
-  const CHUNK_SIZE = 20;
+const CHUNK_SIZE = 20;
+const STATIC_BASE = (typeof location!=='undefined' && location.pathname.indexOf('/short/')>=0) ? 'data/' : 'public/short/data/';
 
 async function fetchCors(url, timeout){
   timeout = timeout || 9000;
@@ -108,6 +109,15 @@ async function apiFetch(path, timeout){
     }catch(e){}
   }
   return null;
+}
+
+async function loadStaticJson(file, timeout){
+  try{
+    const r = await fetchCors(STATIC_BASE + file + '?t=' + Date.now(), timeout || 10000);
+    return await r.json();
+  }catch(e){
+    return null;
+  }
 }
 
 const $ = id => document.getElementById(id);
@@ -360,6 +370,19 @@ async function fillKlinesDirect(out, codes){
 
 async function loadKlines(codes){
   const uniq=[...new Set(codes.filter(c=>/^\d{6}$/.test(c)))];
+  const out={};
+  const staticKlines = await loadStaticJson('klines.json', 12000);
+  if(staticKlines && staticKlines.rows){
+    uniq.forEach(c=>{
+      const raw = staticKlines.rows[c];
+      if(Array.isArray(raw) && raw.length){
+        out[c] = raw.map(x=>({ date:x[0], open:+x[1], close:+x[2], high:+x[3], low:+x[4], volume:+x[5] }));
+      }
+    });
+    const missing=uniq.filter(c=>!(out[c]&&out[c].length));
+    if(missing.length) await fillKlinesDirect(out, missing);
+    return out;
+  }
   if(USE_SERVER && uniq.length){
     try{
       const d=await fetchBatchSequential('/api/klineBatch', uniq, 120, 20000);
@@ -373,12 +396,13 @@ async function loadKlines(codes){
       return d;
     }catch(e){}
   }
-  const out={};
   await fillKlinesDirect(out, uniq);
   return out;
 }
 
 async function loadPool(mode){
+  const staticPool = await loadStaticJson('pool.json', 5000);
+  if(staticPool && Array.isArray(staticPool[mode]) && staticPool[mode].length) return staticPool[mode];
   if(USE_SERVER){
     const got=await apiFetch('/api/pool?mode='+mode, 12000);
     if(got && got.res.ok){
