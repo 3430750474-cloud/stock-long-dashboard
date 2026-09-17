@@ -241,13 +241,6 @@ async function fetchBatchSequential(path, codes, size, timeout){
 
 async function loadQuotes(syms){
   const uniq=[...new Set(syms)];
-  if(USE_SERVER){
-    const got=await apiFetch('/api/quote?codes='+encodeURIComponent(uniq.join(',')), 12000);
-    if(got && got.res.ok){
-      const d=await got.res.json();
-      if(d && Object.keys(d).length) return d;
-    }
-  }
   const url='https://qt.gtimg.cn/q='+uniq.join(',')+'&_='+Date.now();
   const out={};
   try{
@@ -276,6 +269,14 @@ async function loadQuotes(syms){
         }
       }
     }catch(e2){}
+  }
+  if(Object.keys(out).length) return out;
+  if(USE_SERVER){
+    const got=await apiFetch('/api/quote?codes='+encodeURIComponent(uniq.join(',')), 12000);
+    if(got && got.res.ok){
+      const d=await got.res.json();
+      if(d && Object.keys(d).length) return d;
+    }
   }
   return out;
 }
@@ -1033,10 +1034,15 @@ async function scanNow(manual){
     if(!pool.length) throw new Error('候选池为空，请检查网络');
     $('progressText').textContent='候选池 '+pool.length+' 只，批量获取行情…';
     const codes=pool.map(s=>s.code);
-    const [quoteMap,klineMap]=await Promise.all([
-      loadQuotes(pool.map(s=>symOf(s.code)+s.code)),
-      loadKlines(codes)
-    ]);
+    const quoteP=loadQuotes(pool.map(s=>symOf(s.code)+s.code)).then(m=>{
+      $('progressText').textContent='行情完成，正在拉取K线…';
+      return m;
+    });
+    const klineP=loadKlines(codes).then(m=>{
+      $('progressText').textContent='K线完成，计算指标…';
+      return m;
+    });
+    const [quoteMap,klineMap]=await Promise.all([quoteP,klineP]);
     const pre=[];
     pool.forEach(s=>{
       const rows=klineMap[s.code]||[];
