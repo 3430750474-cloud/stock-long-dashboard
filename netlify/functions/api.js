@@ -121,6 +121,56 @@ async function fetchEastmoneyPool(maxPrice, limit){
   return dedupePool(out, limit);
 }
 
+async function fetchEastmoneyFullPool(maxPrice){
+  const pageSize = 6000;
+  const buildUrl = pn => 'https://push2.eastmoney.com/api/qt/clist/get?pn='+pn+'&pz='+pageSize+'&po=0&np=1&fltt=2&invt=2&fid=f2'+
+    '&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048'+
+    '&fields=f2,f3,f5,f6,f8,f10,f12,f14&ut=bd1d9ddb04089700cf9c27f6f7426281';
+  async function getPage(pn){
+    try{
+      const r = await get(buildUrl(pn), { Referer:'https://quote.eastmoney.com/' }, 12000);
+      if(r.status!==200) return { rows:[], total:0 };
+      const data = JSON.parse(new TextDecoder().decode(r.body));
+      return {
+        rows:Array.isArray(((data||{}).data||{}).diff)?data.data.diff:[],
+        total:Number((((data||{}).data||{}).total))||0
+      };
+    }catch(e){
+      return { rows:[], total:0 };
+    }
+  }
+  const first = await getPage(1);
+  if(!first.rows.length) return [];
+  const effectivePageSize = first.rows.length;
+  const total = first.total || effectivePageSize;
+  const pageCount = Math.min(80, Math.max(1, Math.ceil(total/effectivePageSize)));
+  const rest = await runConcurrent(
+    Array.from({length:Math.max(0,pageCount-1)},(_,index)=>index+2),
+    8,
+    getPage
+  );
+  const rows = first.rows.concat(...rest.map(item=>item.rows));
+  const out = [];
+  rows.forEach(x=>{
+    const price = +x.f2;
+    const code = String(x.f12||'');
+    const name = String(x.f14||'');
+    if(!/^\d{6}$/.test(code) || !price || /ST|退/i.test(name)) return;
+    if(price > maxPrice) return;
+    out.push({
+      code,
+      name,
+      price,
+      pct:+x.f3||0,
+      volume:+x.f5||0,
+      amount:+x.f6||0,
+      turnover:+x.f8||0,
+      volRatio:+x.f10||0
+    });
+  });
+  return dedupePool(out, out.length);
+}
+
 async function fetchSinaPool(maxPrice, limit){
   const pages = [1,2,3,4,5,6,7,8];
   const rows = await runConcurrent(pages, 4, async page=>{
@@ -144,11 +194,67 @@ async function fetchSinaPool(maxPrice, limit){
   return dedupePool(out, limit);
 }
 
-async function fetchPool(mode){
-  const key = 'pool:'+mode;
+async function fetchSinaFullPool(maxPrice){
+  const pageSize = 500;
+  const maxPages = 80;
+  const buildUrl = page => 'https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+page+
+    '&num='+pageSize+'&sort=amount&asc=0&node=hs_a&symbol=&_s_r_a=page';
+  async function getPage(page){
+    try{
+      const r = await get(buildUrl(page), {}, 8000);
+      if(r.status!==200) return [];
+      const arr = JSON.parse(new TextDecoder().decode(r.body));
+      return Array.isArray(arr)?arr:[];
+    }catch(e){
+      return [];
+    }
+  }
+  const first = await getPage(1);
+  if(!first.length) return [];
+  const rest = await runConcurrent(
+    Array.from({length:maxPages-1},(_,index)=>index+2),
+    12,
+    getPage
+  );
+  const out = [];
+  [first].concat(rest).forEach(arr=>{
+    arr.forEach(x=>{
+      const price = +x.trade || +x.settlement;
+      if(!x.code || !price || /ST|退/i.test(x.name||'')) return;
+      if(price > maxPrice) return;
+      out.push({
+        code:String(x.code),
+        name:x.name,
+        price,
+        pct:+x.changepercent||0,
+        volume:+x.volume||0,
+        amount:+x.amount||0,
+        turnover:+x.turnoverratio||0,
+        volRatio:0
+      });
+    });
+  });
+  return dedupePool(out, out.length);
+}
+
+async function fetchPool(mode, full){
+  const key = 'pool:'+mode+(full?':full':'');
   const cached = cacheGet(key, 5*60*1000);
   if(cached) return cached;
   const maxPrice = mode==='lt10' ? 10 : (mode==='lt100' ? 100 : Infinity);
+  if(full){
+    const minimum = mode==='all' ? 2000 : (mode==='lt100' ? 500 : 30);
+    const complete = await fetchEastmoneyFullPool(maxPrice);
+    if(complete.length>=minimum){
+      cacheSet(key, complete, 5*60*1000);
+      return complete;
+    }
+    const sinaComplete = await fetchSinaFullPool(maxPrice);
+    if(sinaComplete.length>=minimum){
+      cacheSet(key, sinaComplete, 5*60*1000);
+      return sinaComplete;
+    }
+  }
   const limit = 160;
   let res = await fetchEastmoneyPool(maxPrice, limit);
   if(res.length < 60) res = await fetchSinaPool(maxPrice, limit);
@@ -271,7 +377,7 @@ exports.handler = async (event) => {
   try{
     if(p==='/api/pool'){
       const mode = url.searchParams.get('mode') || 'lt100';
-      return respond(await fetchPool(mode));
+      return respond(await fetchPool(mode, url.searchParams.get('full')==='1'));
     }
     if(p==='/api/quote'){
       const codes = (url.searchParams.get('codes')||'').split(',').filter(Boolean);

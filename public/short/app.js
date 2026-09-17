@@ -213,7 +213,7 @@ async function fetchBatchMap(path, codes){
   const chunks=[];
   for(let i=0;i<codes.length;i+=CHUNK_SIZE) chunks.push(codes.slice(i,i+CHUNK_SIZE));
   await Promise.all(chunks.map(async part=>{
-    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 12000);
+    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 8000);
     if(got && got.res.ok){
       try{
         const d=await got.res.json();
@@ -317,18 +317,18 @@ let klineDirectSeq = 0;
 async function loadKlineDirect(code){
   const sym=symOf(code);
   try{
-    const cb='kcb_'+code+'_'+(++klineDirectSeq);
-    const arr=await jsonp('https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=120&callback='+cb, cb, 5000);
-    if(arr&&arr.length){
-      return arr.map(x=>({ date:x.day, open:+x.open, close:+x.close, high:+x.high, low:+x.low, volume:+x.volume/100 }));
-    }
-  }catch(e){}
-  try{
     const url='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+code+',day,,,120,qfq';
     const data=await fetchJson(url, null, 5000);
     const d=(((data||{}).data||{})[sym+code])||{};
     const raw=d['qfqday']||d['day']||[];
     if(raw.length) return raw.map(x=>({ date:x[0], open:+x[1], close:+x[2], high:+x[3], low:+x[4], volume:+x[5] }));
+  }catch(e){}
+  try{
+    const cb='kcb_'+code+'_'+(++klineDirectSeq);
+    const arr=await jsonp('https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=120&callback='+cb, cb, 4000);
+    if(arr&&arr.length){
+      return arr.map(x=>({ date:x.day, open:+x.open, close:+x.close, high:+x.high, low:+x.low, volume:+x.volume/100 }));
+    }
   }catch(e){}
   return [];
 }
