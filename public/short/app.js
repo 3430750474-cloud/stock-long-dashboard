@@ -224,6 +224,21 @@ async function fetchBatchMap(path, codes){
   return out;
 }
 
+async function fetchBatchSequential(path, codes, size, timeout){
+  const out={};
+  for(let i=0;i<codes.length;i+=size){
+    const part=codes.slice(i,i+size);
+    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), timeout);
+    if(got && got.res.ok){
+      try{
+        const d=await got.res.json();
+        if(d) Object.assign(out,d);
+      }catch(e){}
+    }
+  }
+  return out;
+}
+
 async function loadQuotes(syms){
   const uniq=[...new Set(syms)];
   if(USE_SERVER){
@@ -346,10 +361,10 @@ async function loadKlines(codes){
   const uniq=[...new Set(codes.filter(c=>/^\d{6}$/.test(c)))];
   if(USE_SERVER && uniq.length){
     try{
-      const d=await fetchBatchMap('/api/klineBatch', uniq);
+      const d=await fetchBatchSequential('/api/klineBatch', uniq, 120, 20000);
       let missing=uniq.filter(c=>!(d[c]&&d[c].length));
       if(missing.length){
-        const retry=await fetchBatchMap('/api/klineBatch', missing);
+        const retry=await fetchBatchSequential('/api/klineBatch', missing, 120, 20000);
         if(retry) Object.assign(d,retry);
         missing=uniq.filter(c=>!(d[c]&&d[c].length));
       }
@@ -438,16 +453,9 @@ async function loadQualities(codes){
   const uniq=[...new Set(codes.filter(c=>/^\d{6}$/.test(c)))];
   if(!uniq.length) return {};
   const out={};
-  if(USE_SERVER){
-    try{
-      const d=await fetchBatchMap('/api/qualityBatch', uniq);
-      if(d) Object.assign(out,d);
-    }catch(e){}
-  }
-  const missing=uniq.filter(c=>!out[c] || !out[c].ok);
   const CH=20;
-  for(let i=0;i<missing.length;i+=CH){
-    await Promise.all(missing.slice(i,i+CH).map(async c=>{
+  for(let i=0;i<uniq.length;i+=CH){
+    await Promise.all(uniq.slice(i,i+CH).map(async c=>{
       out[c]=await loadQualityDirect(c);
     }));
   }
