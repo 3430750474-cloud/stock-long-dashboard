@@ -84,7 +84,7 @@ const API_CANDIDATES = (()=>{
   [NETLIFY_API, WORKER_API].forEach(u=>{ if(list.indexOf(u)<0) list.push(u); });
   return list;
 })();
-const CHUNK_SIZE = 120;
+const CHUNK_SIZE = 40;
 
 async function fetchCors(url, timeout){
   timeout = timeout || 9000;
@@ -213,7 +213,7 @@ async function fetchBatchMap(path, codes){
   const chunks=[];
   for(let i=0;i<codes.length;i+=CHUNK_SIZE) chunks.push(codes.slice(i,i+CHUNK_SIZE));
   await Promise.all(chunks.map(async part=>{
-    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 60000);
+    const got=await apiFetch(path+'?codes='+encodeURIComponent(part.join(',')), 12000);
     if(got && got.res.ok){
       try{
         const d=await got.res.json();
@@ -313,25 +313,47 @@ async function loadKline(code){
   return rows;
 }
 
+let klineDirectSeq = 0;
+async function loadKlineDirect(code){
+  const sym=symOf(code);
+  try{
+    const cb='kcb_'+code+'_'+(++klineDirectSeq);
+    const arr=await jsonp('https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol='+sym+code+'&scale=240&ma=no&datalen=120&callback='+cb, cb, 5000);
+    if(arr&&arr.length){
+      return arr.map(x=>({ date:x.day, open:+x.open, close:+x.close, high:+x.high, low:+x.low, volume:+x.volume/100 }));
+    }
+  }catch(e){}
+  try{
+    const url='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+sym+code+',day,,,120,qfq';
+    const data=await fetchJson(url, null, 5000);
+    const d=(((data||{}).data||{})[sym+code])||{};
+    const raw=d['qfqday']||d['day']||[];
+    if(raw.length) return raw.map(x=>({ date:x[0], open:+x[1], close:+x[2], high:+x[3], low:+x[4], volume:+x[5] }));
+  }catch(e){}
+  return [];
+}
+
+async function fillKlinesDirect(out, codes){
+  const CH=20;
+  for(let i=0;i<codes.length;i+=CH){
+    await Promise.all(codes.slice(i,i+CH).map(async c=>{
+      try{ out[c]=await loadKlineDirect(c); }catch(e){}
+    }));
+  }
+}
+
 async function loadKlines(codes){
   const uniq=[...new Set(codes.filter(c=>/^\d{6}$/.test(c)))];
   if(USE_SERVER && uniq.length){
     try{
       const d=await fetchBatchMap('/api/klineBatch', uniq);
-      if(Object.keys(d).length){
-        const missing=uniq.filter(c=>!(d[c]&&d[c].length));
-        if(missing.length) Object.assign(d, await fetchBatchMap('/api/klineBatch', missing));
-        return d;
-      }
+      const missing=uniq.filter(c=>!(d[c]&&d[c].length));
+      if(missing.length) await fillKlinesDirect(d, missing);
+      return d;
     }catch(e){}
   }
   const out={};
-  const CH=10;
-  for(let i=0;i<uniq.length;i+=CH){
-    await Promise.all(uniq.slice(i,i+CH).map(async c=>{
-      try{ out[c]=await loadKline(c); }catch(e){}
-    }));
-  }
+  await fillKlinesDirect(out, uniq);
   return out;
 }
 
