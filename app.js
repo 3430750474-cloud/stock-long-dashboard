@@ -398,6 +398,22 @@ async function loadPool(mode){
   return uniq.sort((a,b)=>(b.amount||0)-(a.amount||0)).slice(0,160);
 }
 
+async function loadQualityDirect(code){
+  const now=Date.now();
+  const scode = code.startsWith('6') ? code+'.SH' : code+'.SZ';
+  const url='https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=(SECUCODE%3D%22'+scode+'%22)&pageNumber=1&pageSize=2&sortTypes=-1&sortColumns=REPORT_DATE';
+  try{
+    const data=await fetchJson(url, null, 5000);
+    const rows=(((data||{}).result||{}).data)||[];
+    const it=rows[0]||{};
+    const d={ ok:!!it.PARENTNETPROFIT, profit:it.PARENTNETPROFIT, roe:it.ROEJQ, debt:it.ZCFZL, profitGrowth:it.PARENTNETPROFITTZ, revGrowth:it.TOTALOPERATEREVETZ };
+    state.qualCache.set(code,{d,t:now});
+    return d;
+  }catch(e){
+    return { ok:false };
+  }
+}
+
 async function loadQuality(code){
   const now=Date.now();
   const cached=state.qualCache.get(code);
@@ -410,34 +426,24 @@ async function loadQuality(code){
       return d;
     }
   }
-  const scode = code.startsWith('6') ? code+'.SH' : code+'.SZ';
-  const url='https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=(SECUCODE%3D%22'+scode+'%22)&pageNumber=1&pageSize=2&sortTypes=-1&sortColumns=REPORT_DATE';
-  try{
-    const data=await fetchJson(url);
-    const rows=(((data||{}).result||{}).data)||[];
-    const it=rows[0]||{};
-    const d={ ok:!!it.PARENTNETPROFIT, profit:it.PARENTNETPROFIT, roe:it.ROEJQ, debt:it.ZCFZL, profitGrowth:it.PARENTNETPROFITTZ, revGrowth:it.TOTALOPERATEREVETZ };
-    state.qualCache.set(code,{d,t:now});
-    return d;
-  }catch(e){
-    return { ok:false };
-  }
+  return loadQualityDirect(code);
 }
 
 async function loadQualities(codes){
   const uniq=[...new Set(codes.filter(c=>/^\d{6}$/.test(c)))];
   if(!uniq.length) return {};
+  const out={};
   if(USE_SERVER){
     try{
       const d=await fetchBatchMap('/api/qualityBatch', uniq);
-      if(Object.keys(d).length) return d;
+      if(d) Object.assign(out,d);
     }catch(e){}
   }
-  const out={};
-  const CH=6;
-  for(let i=0;i<uniq.length;i+=CH){
-    await Promise.all(uniq.slice(i,i+CH).map(async c=>{
-      out[c]=await loadQuality(c);
+  const missing=uniq.filter(c=>!out[c] || !out[c].ok);
+  const CH=20;
+  for(let i=0;i<missing.length;i+=CH){
+    await Promise.all(missing.slice(i,i+CH).map(async c=>{
+      out[c]=await loadQualityDirect(c);
     }));
   }
   return out;
